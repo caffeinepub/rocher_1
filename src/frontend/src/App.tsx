@@ -24,7 +24,7 @@ import { toast } from "sonner";
 const LOGO =
   "/assets/uploads/rocher_2_logo-019d2487-1d4d-76d8-902f-54fb04dc6ff6-5.png";
 const BANNER =
-  "/assets/uploads/rocher-banner-019d2487-1b38-76ab-b359-ea9eb9851e08-4.jpg";
+  "/assets/uploads/rocher-banner-019d2803-de4c-7516-938d-f7ddc535d35e-1.jpg";
 const INSTAGRAM_URL = "https://www.instagram.com/official_rocher";
 const SIZES = ["S", "M", "L", "XL"];
 const ADMIN_PASSWORD = "rocher2024";
@@ -257,17 +257,29 @@ function ImageFallback({
   );
 }
 
+/* ─── CHECKOUT ITEM ─── */
+interface CheckoutItem {
+  id: string;
+  name: string;
+  price: number;
+  image: string;
+  size: string;
+  qty: number;
+}
+
 /* ─── PRODUCT DETAIL MODAL ─── */
 function ProductModal({
   product,
   sale,
   onClose,
   onAddToCart,
+  onDirectBuy,
 }: {
   product: Product;
   sale: SaleSettings;
   onClose: () => void;
   onAddToCart: (item: CartItem) => void;
+  onDirectBuy?: (item: CheckoutItem) => void;
 }) {
   const [imgIndex, setImgIndex] = useState(0);
   const [size, setSize] = useState("");
@@ -512,8 +524,356 @@ function ProductModal({
               >
                 Order via Instagram
               </a>
+              {onDirectBuy && (
+                <button
+                  type="button"
+                  data-ocid="product.primary_button"
+                  onClick={() => {
+                    if (!size) {
+                      setSizeError(true);
+                      toast.error("Please select a size first");
+                      return;
+                    }
+                    onDirectBuy({
+                      id: `${product.id}-${size}`,
+                      name: product.name,
+                      price: discountedPrice ?? product.price,
+                      image: product.images[0],
+                      size,
+                      qty: 1,
+                    });
+                    onClose();
+                  }}
+                  className="w-full py-3.5 font-display font-bold text-sm tracking-widest uppercase rounded-lg"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #c9a84c, #f0d080, #c9a84c)",
+                    color: "#0a0a0a",
+                  }}
+                >
+                  ⚡ Direct Buy
+                </button>
+              )}
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── CHECKOUT MODAL ─── */
+function CheckoutModal({
+  item,
+  onClose,
+  promoCodes,
+  paymentMethods,
+}: {
+  item: CheckoutItem | null;
+  onClose: () => void;
+  promoCodes: PromoCode[];
+  paymentMethods: PaymentMethod[];
+}) {
+  const [form, setForm] = useState({
+    name: "",
+    phone: "",
+    address1: "",
+    address2: "",
+    city: "",
+    state: "",
+    pincode: "",
+  });
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null);
+  const [promoError, setPromoError] = useState("");
+  const enabledPayments = paymentMethods.filter((pm) => pm.enabled);
+  const [selectedPayment, setSelectedPayment] = useState<string>(
+    () => enabledPayments[0]?.id || "",
+  );
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+
+  if (!item) return null;
+
+  const discount = appliedPromo ? appliedPromo.discount : 0;
+  const finalPrice = Math.round(item.price * item.qty * (1 - discount / 100));
+
+  const applyPromo = () => {
+    const code = promoInput.trim().toUpperCase();
+    const found = promoCodes.find((p) => p.code === code && p.enabled);
+    if (found) {
+      setAppliedPromo(found);
+      setPromoError("");
+      toast.success(`Promo applied! ${found.discount}% off`);
+    } else {
+      setAppliedPromo(null);
+      setPromoError("Invalid or expired promo code");
+    }
+  };
+
+  const handlePlaceOrder = () => {
+    if (
+      !form.name ||
+      !form.phone ||
+      !form.address1 ||
+      !form.city ||
+      !form.state ||
+      !form.pincode
+    ) {
+      toast.error("Please fill in all required address fields");
+      return;
+    }
+    const paymentLabel =
+      enabledPayments.find((p) => p.id === selectedPayment)?.label ||
+      selectedPayment;
+    const msg = encodeURIComponent(
+      `🛍️ ORDER REQUEST\n\nProduct: ${item.name}\nSize: ${item.size}\nQty: ${item.qty}\nPrice: ₹${finalPrice}${appliedPromo ? ` (Promo: ${appliedPromo.code} -${appliedPromo.discount}%)` : ""}\n\nDelivery Address:\n${form.name}\n${form.phone}\n${form.address1}${form.address2 ? `, ${form.address2}` : ""}\n${form.city}, ${form.state} - ${form.pincode}\n\nPayment: ${paymentLabel}`,
+    );
+    window.open(
+      `https://www.instagram.com/official_rocher?text=${msg}`,
+      "_blank",
+    );
+    toast.success("Redirecting to Instagram DM to confirm order!");
+    onClose();
+  };
+
+  const inputClass =
+    "w-full bg-background border border-border rounded-lg px-4 py-3 text-foreground text-sm font-display placeholder-muted-foreground focus:outline-none focus:border-brand-gold transition-colors";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      data-ocid="checkout.modal"
+    >
+      <div
+        className="absolute inset-0 bg-black/85 backdrop-blur-md animate-fade-in"
+        onClick={onClose}
+        role="button"
+        tabIndex={-1}
+        aria-label="Close"
+        onKeyDown={(e) => e.key === "Enter" && onClose()}
+      />
+      <div className="relative z-10 bg-card rounded-xl overflow-hidden w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl animate-fade-in-up border border-brand-gold/30">
+        <button
+          type="button"
+          onClick={onClose}
+          data-ocid="checkout.close_button"
+          className="absolute top-4 right-4 z-20 w-9 h-9 rounded-full bg-background/80 flex items-center justify-center text-foreground hover:text-brand-gold transition-colors"
+        >
+          <X size={18} />
+        </button>
+
+        <div className="p-7">
+          <h2 className="font-display text-2xl font-bold text-brand-gold mb-1 tracking-wide">
+            Checkout
+          </h2>
+          <div className="gold-divider mb-5" />
+
+          {/* Order Summary */}
+          <div className="bg-background/60 rounded-lg p-4 flex gap-4 items-center mb-6 border border-border">
+            <img
+              src={item.image}
+              alt={item.name}
+              className="w-16 h-16 object-cover rounded-lg border border-border"
+            />
+            <div className="flex-1">
+              <p className="font-display font-bold text-foreground text-base">
+                {item.name}
+              </p>
+              <p className="text-muted-foreground text-sm">
+                Size: {item.size} · Qty: {item.qty}
+              </p>
+              <p className="text-brand-gold font-bold font-display text-lg mt-1">
+                ₹{item.price * item.qty}
+              </p>
+            </div>
+          </div>
+
+          {/* Delivery Address */}
+          <p className="text-xs font-bold uppercase tracking-widest text-brand-gold mb-3">
+            Delivery Address
+          </p>
+          <div className="flex flex-col gap-3 mb-5">
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                className={inputClass}
+                placeholder="Full Name *"
+                value={form.name}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, name: e.target.value }))
+                }
+                data-ocid="checkout.input"
+              />
+              <input
+                className={inputClass}
+                placeholder="Phone Number *"
+                value={form.phone}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, phone: e.target.value }))
+                }
+                data-ocid="checkout.input"
+              />
+            </div>
+            <input
+              className={inputClass}
+              placeholder="Address Line 1 *"
+              value={form.address1}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, address1: e.target.value }))
+              }
+              data-ocid="checkout.input"
+            />
+            <input
+              className={inputClass}
+              placeholder="Address Line 2 (optional)"
+              value={form.address2}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, address2: e.target.value }))
+              }
+              data-ocid="checkout.input"
+            />
+            <div className="grid grid-cols-3 gap-3">
+              <input
+                className={inputClass}
+                placeholder="City *"
+                value={form.city}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, city: e.target.value }))
+                }
+                data-ocid="checkout.input"
+              />
+              <input
+                className={inputClass}
+                placeholder="State *"
+                value={form.state}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, state: e.target.value }))
+                }
+                data-ocid="checkout.input"
+              />
+              <input
+                className={inputClass}
+                placeholder="Pincode *"
+                value={form.pincode}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, pincode: e.target.value }))
+                }
+                data-ocid="checkout.input"
+              />
+            </div>
+          </div>
+
+          {/* Promo Code */}
+          <p className="text-xs font-bold uppercase tracking-widest text-brand-gold mb-3">
+            Promo Code
+          </p>
+          <div className="flex gap-2 mb-5">
+            <input
+              className={inputClass}
+              placeholder="Enter promo code"
+              value={promoInput}
+              onChange={(e) => {
+                setPromoInput(e.target.value);
+                setPromoError("");
+              }}
+              data-ocid="checkout.input"
+            />
+            <button
+              type="button"
+              onClick={applyPromo}
+              data-ocid="checkout.secondary_button"
+              className="px-5 py-3 font-display font-bold text-sm uppercase tracking-widest btn-gold rounded-lg whitespace-nowrap"
+            >
+              Apply
+            </button>
+          </div>
+          {promoError && (
+            <p
+              className="text-destructive text-xs mb-3"
+              data-ocid="checkout.error_state"
+            >
+              {promoError}
+            </p>
+          )}
+          {appliedPromo && (
+            <p
+              className="text-green-400 text-xs mb-3"
+              data-ocid="checkout.success_state"
+            >
+              ✓ {appliedPromo.code} applied — {appliedPromo.discount}% off
+            </p>
+          )}
+
+          {/* Payment Method */}
+          {enabledPayments.length > 0 && (
+            <>
+              <p className="text-xs font-bold uppercase tracking-widest text-brand-gold mb-3">
+                Payment Method
+              </p>
+              <div className="flex flex-col gap-2 mb-5">
+                {enabledPayments.map((pm) => (
+                  <label
+                    key={pm.id}
+                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedPayment === pm.id ? "border-brand-gold bg-brand-gold/10" : "border-border"}`}
+                    data-ocid="checkout.radio"
+                  >
+                    <input
+                      type="radio"
+                      name="payment"
+                      value={pm.id}
+                      checked={selectedPayment === pm.id}
+                      onChange={() => setSelectedPayment(pm.id)}
+                      className="accent-brand-gold"
+                    />
+                    <span className="font-display text-sm text-foreground">
+                      {pm.label}
+                    </span>
+                    {pm.details && (
+                      <span className="text-muted-foreground text-xs ml-auto">
+                        {pm.details}
+                      </span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Order Total */}
+          <div className="bg-background/60 rounded-lg p-4 border border-border mb-5">
+            <div className="flex justify-between text-sm text-muted-foreground mb-1">
+              <span>
+                Subtotal ({item.qty} item{item.qty > 1 ? "s" : ""})
+              </span>
+              <span>₹{item.price * item.qty}</span>
+            </div>
+            {appliedPromo && (
+              <div className="flex justify-between text-sm text-green-400 mb-1">
+                <span>Promo ({appliedPromo.code})</span>
+                <span>-{appliedPromo.discount}%</span>
+              </div>
+            )}
+            <div className="gold-divider my-2" />
+            <div className="flex justify-between font-display font-bold text-brand-gold text-lg">
+              <span>Total</span>
+              <span>₹{finalPrice}</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handlePlaceOrder}
+            data-ocid="checkout.submit_button"
+            className="w-full py-4 font-display font-bold text-base uppercase tracking-widest btn-gold rounded-lg shadow-gold-glow"
+          >
+            Place Order via Instagram
+          </button>
         </div>
       </div>
     </div>
@@ -1912,12 +2272,14 @@ function ProductCard({
   sale,
   onAddToCart,
   onOpenDetail,
+  onDirectBuy,
   index,
 }: {
   product: Product;
   sale: SaleSettings;
   onAddToCart: (item: CartItem) => void;
   onOpenDetail: (p: Product) => void;
+  onDirectBuy: (item: CheckoutItem) => void;
   index: number;
 }) {
   const [imgIndex, setImgIndex] = useState(0);
@@ -2094,6 +2456,32 @@ function ProductCard({
           >
             Order via Instagram
           </a>
+          <button
+            type="button"
+            data-ocid={`products.primary_button.${index + 1}`}
+            onClick={() => {
+              if (!selectedSize) {
+                setSizeError(true);
+                toast.error("Please select a size first");
+                return;
+              }
+              onDirectBuy({
+                id: `${product.id}-${selectedSize}`,
+                name: product.name,
+                price: discountedPrice ?? product.price,
+                image: product.images[0],
+                size: selectedSize,
+                qty: 1,
+              });
+            }}
+            className="w-full py-3 font-display font-bold text-sm uppercase tracking-widest rounded-lg"
+            style={{
+              background: "linear-gradient(135deg, #c9a84c, #f0d080, #c9a84c)",
+              color: "#0a0a0a",
+            }}
+          >
+            ⚡ Direct Buy
+          </button>
         </div>
       </div>
     </div>
@@ -2393,6 +2781,11 @@ export default function App() {
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [checkoutItem, setCheckoutItem] = useState<CheckoutItem | null>(null);
+
+  const handleDirectBuy = useCallback((item: CheckoutItem) => {
+    setCheckoutItem(item);
+  }, []);
   const logoClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
@@ -2644,6 +3037,7 @@ export default function App() {
               sale={sale}
               onAddToCart={addToCart}
               onOpenDetail={setSelectedProduct}
+              onDirectBuy={handleDirectBuy}
               index={i}
             />
           ))}
@@ -2763,6 +3157,16 @@ export default function App() {
           onAddToCart={(item) => {
             addToCart(item);
           }}
+          onDirectBuy={handleDirectBuy}
+        />
+      )}
+
+      {checkoutItem && (
+        <CheckoutModal
+          item={checkoutItem}
+          onClose={() => setCheckoutItem(null)}
+          promoCodes={promoCodes}
+          paymentMethods={paymentMethods}
         />
       )}
 
