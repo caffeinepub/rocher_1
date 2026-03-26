@@ -8,6 +8,8 @@ import {
   Lock,
   LogOut,
   Menu,
+  PackageCheck,
+  PackageX,
   Palette,
   Plus,
   Save,
@@ -34,6 +36,7 @@ const LS_PROMO_KEY = "rocher_promo_codes";
 const LS_PAYMENT_KEY = "rocher_payment_methods";
 const LS_BANNER_KEY = "rocher_custom_banner";
 const LS_BG_KEY = "rocher_custom_bg";
+const LS_ORDERS_KEY = "rocher_orders";
 
 const SIZE_GUIDE = [
   { size: "S", chest: '36"', waist: '30"', length: '27"' },
@@ -80,6 +83,50 @@ interface PaymentMethod {
   label: string;
   details: string;
   enabled: boolean;
+}
+
+interface Order {
+  id: string;
+  createdAt: string;
+  status: "placed" | "cancelled";
+  product: string;
+  size: string;
+  qty: number;
+  price: number;
+  paymentMethod: string;
+  promoCode: string;
+  name: string;
+  phone: string;
+  address: string;
+  viaInstagram: boolean;
+}
+
+function loadOrders(): Order[] {
+  try {
+    const raw = localStorage.getItem(LS_ORDERS_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as Order[];
+  } catch {
+    return [];
+  }
+}
+
+function saveOrder(order: Order) {
+  try {
+    const existing = loadOrders();
+    const updated = [order, ...existing];
+    localStorage.setItem(LS_ORDERS_KEY, JSON.stringify(updated));
+  } catch {}
+}
+
+function cancelOrder(orderId: string) {
+  try {
+    const existing = loadOrders();
+    const updated = existing.map((o) =>
+      o.id === orderId ? { ...o, status: "cancelled" as const } : o,
+    );
+    localStorage.setItem(LS_ORDERS_KEY, JSON.stringify(updated));
+  } catch {}
 }
 
 const DEFAULT_PRODUCTS: Product[] = [
@@ -568,11 +615,13 @@ function CheckoutModal({
   onClose,
   promoCodes,
   paymentMethods,
+  onOrderPlaced,
 }: {
   item: CheckoutItem | null;
   onClose: () => void;
   promoCodes: PromoCode[];
   paymentMethods: PaymentMethod[];
+  onOrderPlaced?: (order: Order) => void;
 }) {
   const [form, setForm] = useState({
     name: "",
@@ -617,7 +666,30 @@ function CheckoutModal({
     }
   };
 
-  const handlePlaceOrder = () => {
+  const buildOrder = (viaInstagram: boolean): Order => {
+    const paymentLabel =
+      enabledPayments.find((p) => p.id === selectedPayment)?.label ||
+      selectedPayment;
+    return {
+      id: Date.now().toString() + Math.random().toString(36).slice(2, 7),
+      createdAt: new Date().toISOString(),
+      status: "placed",
+      product: item!.name,
+      size: item!.size,
+      qty: item!.qty,
+      price: finalPrice,
+      paymentMethod: paymentLabel,
+      promoCode: appliedPromo
+        ? `${appliedPromo.code} (-${appliedPromo.discount}%)`
+        : "",
+      name: form.name,
+      phone: form.phone,
+      address: `${form.address1}${form.address2 ? `, ${form.address2}` : ""}, ${form.city}, ${form.state} - ${form.pincode}`,
+      viaInstagram,
+    };
+  };
+
+  const validateForm = () => {
     if (
       !form.name ||
       !form.phone ||
@@ -627,19 +699,36 @@ function CheckoutModal({
       !form.pincode
     ) {
       toast.error("Please fill in all required address fields");
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const handlePlaceOrder = () => {
+    if (!validateForm()) return;
+    const order = buildOrder(true);
+    saveOrder(order);
+    onOrderPlaced?.(order);
     const paymentLabel =
       enabledPayments.find((p) => p.id === selectedPayment)?.label ||
       selectedPayment;
     const msg = encodeURIComponent(
-      `🛍️ ORDER REQUEST\n\nProduct: ${item.name}\nSize: ${item.size}\nQty: ${item.qty}\nPrice: ₹${finalPrice}${appliedPromo ? ` (Promo: ${appliedPromo.code} -${appliedPromo.discount}%)` : ""}\n\nDelivery Address:\n${form.name}\n${form.phone}\n${form.address1}${form.address2 ? `, ${form.address2}` : ""}\n${form.city}, ${form.state} - ${form.pincode}\n\nPayment: ${paymentLabel}`,
+      `🛍️ ORDER REQUEST\n\nProduct: ${item!.name}\nSize: ${item!.size}\nQty: ${item!.qty}\nPrice: ₹${finalPrice}${appliedPromo ? ` (Promo: ${appliedPromo.code} -${appliedPromo.discount}%)` : ""}\n\nDelivery Address:\n${form.name}\n${form.phone}\n${form.address1}${form.address2 ? `, ${form.address2}` : ""}\n${form.city}, ${form.state} - ${form.pincode}\n\nPayment: ${paymentLabel}`,
     );
     window.open(
       `https://www.instagram.com/official_rocher?text=${msg}`,
       "_blank",
     );
-    toast.success("Redirecting to Instagram DM to confirm order!");
+    toast.success("Order sent! Check Instagram DM to confirm.");
+    onClose();
+  };
+
+  const handleDirectOrder = () => {
+    if (!validateForm()) return;
+    const order = buildOrder(false);
+    saveOrder(order);
+    onOrderPlaced?.(order);
+    toast.success("Order placed successfully! We will contact you soon.");
     onClose();
   };
 
@@ -866,14 +955,29 @@ function CheckoutModal({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handlePlaceOrder}
-            data-ocid="checkout.submit_button"
-            className="w-full py-4 font-display font-bold text-base uppercase tracking-widest btn-gold rounded-lg shadow-gold-glow"
-          >
-            Place Order via Instagram
-          </button>
+          <div className="flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={handlePlaceOrder}
+              data-ocid="checkout.submit_button"
+              className="w-full py-4 font-display font-bold text-base uppercase tracking-widest btn-gold rounded-lg shadow-gold-glow flex items-center justify-center gap-2"
+            >
+              <Instagram size={18} /> Order via Instagram
+            </button>
+            <button
+              type="button"
+              onClick={handleDirectOrder}
+              data-ocid="checkout.submit_button"
+              className="w-full py-4 font-display font-bold text-base uppercase tracking-widest rounded-lg flex items-center justify-center gap-2"
+              style={{
+                background:
+                  "linear-gradient(135deg, #c9a84c, #f0d080, #c9a84c)",
+                color: "#0a0a0a",
+              }}
+            >
+              <PackageCheck size={18} /> Place Direct Order
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1106,6 +1210,18 @@ function AdminPanel({
   const [newPayDetails, setNewPayDetails] = useState("");
   const [newPayEnabled, setNewPayEnabled] = useState(true);
   const [newPayError, setNewPayError] = useState("");
+  const [orders, setOrders] = useState<Order[]>(() => loadOrders());
+  const [activeTab, setActiveTab] = useState<
+    "products" | "sale" | "payments" | "promos" | "appearance" | "orders"
+  >("products");
+
+  const refreshOrders = () => setOrders(loadOrders());
+
+  const handleCancelOrder = (orderId: string) => {
+    cancelOrder(orderId);
+    refreshOrders();
+    toast.success("Order marked as cancelled");
+  };
 
   const update = (
     id: string,
@@ -1340,255 +1456,492 @@ function AdminPanel({
         </div>
       </header>
 
+      {/* Tab Navigation */}
+      <div
+        className="border-b border-border sticky top-[73px] z-10 px-6"
+        style={{
+          backgroundColor: "oklch(0.09 0.008 60 / 0.97)",
+          backdropFilter: "blur(12px)",
+        }}
+      >
+        <div className="max-w-5xl mx-auto flex gap-1 overflow-x-auto">
+          {(
+            [
+              { key: "products", label: "Products", icon: "📦" },
+              { key: "orders", label: "Orders", icon: "🧾" },
+              { key: "sale", label: "Sale", icon: "🔥" },
+              { key: "payments", label: "Payments", icon: "💳" },
+              { key: "promos", label: "Promos", icon: "🎟️" },
+              { key: "appearance", label: "Appearance", icon: "🎨" },
+            ] as { key: typeof activeTab; label: string; icon: string }[]
+          ).map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => {
+                setActiveTab(tab.key);
+                if (tab.key === "orders") refreshOrders();
+              }}
+              className={`px-4 py-3 font-display font-bold text-xs uppercase tracking-widest whitespace-nowrap border-b-2 transition-colors ${activeTab === tab.key ? "border-brand-gold text-brand-gold" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            >
+              {tab.icon} {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="max-w-5xl mx-auto px-6 py-10 space-y-10">
         {/* ── SALE SETTINGS ── */}
-        <section>
-          <div className="flex items-center gap-2 mb-4">
-            <Tag size={16} className="text-brand-gold" />
-            <h2 className="font-display text-xl font-bold text-foreground">
-              Sale Settings
-            </h2>
-          </div>
-          <div
-            className="bg-card border rounded-xl p-6 shadow-card"
-            style={{
-              borderColor: sale.enabled
-                ? "oklch(0.45 0.2 25 / 0.5)"
-                : undefined,
-            }}
-            data-ocid="admin.panel"
-          >
-            {sale.enabled && (
-              <div
-                className="mb-4 px-4 py-2 rounded-lg text-sm font-bold text-white flex items-center gap-2"
-                style={{ background: "oklch(0.45 0.2 25)" }}
-                data-ocid="admin.success_state"
-              >
-                🔥 Sale is LIVE — {sale.label} · {sale.discount}% OFF
-              </div>
-            )}
-            <div className="flex flex-col gap-5">
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  id="sale-enabled"
-                  checked={sale.enabled}
-                  onChange={(e) =>
-                    setSale((s) => ({ ...s, enabled: e.target.checked }))
-                  }
-                  data-ocid="admin.checkbox.1"
-                  className="w-4 h-4 accent-brand-gold cursor-pointer"
-                />
-                <label
-                  htmlFor="sale-enabled"
-                  className="font-bold text-sm text-foreground cursor-pointer select-none"
-                >
-                  Enable Sale
-                </label>
-              </div>
-
+        {activeTab === "sale" && (
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <Tag size={16} className="text-brand-gold" />
+              <h2 className="font-display text-xl font-bold text-foreground">
+                Sale Settings
+              </h2>
+            </div>
+            <div
+              className="bg-card border rounded-xl p-6 shadow-card"
+              style={{
+                borderColor: sale.enabled
+                  ? "oklch(0.45 0.2 25 / 0.5)"
+                  : undefined,
+              }}
+              data-ocid="admin.panel"
+            >
               {sale.enabled && (
-                <div className="grid sm:grid-cols-2 gap-4 animate-fade-in">
-                  <div>
-                    <label
-                      htmlFor="sale-discount"
-                      className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
-                    >
-                      Discount %
-                    </label>
-                    <input
-                      id="sale-discount"
-                      type="number"
-                      min="1"
-                      max="90"
-                      value={sale.discount}
-                      onChange={(e) =>
-                        setSale((s) => ({
-                          ...s,
-                          discount: Math.min(
-                            90,
-                            Math.max(1, Number(e.target.value)),
-                          ),
-                        }))
-                      }
-                      data-ocid="admin.input"
-                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="sale-label"
-                      className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
-                    >
-                      Sale Label
-                    </label>
-                    <input
-                      id="sale-label"
-                      type="text"
-                      value={sale.label}
-                      onChange={(e) =>
-                        setSale((s) => ({ ...s, label: e.target.value }))
-                      }
-                      data-ocid="admin.input"
-                      placeholder="e.g. SUMMER SALE"
-                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
-                    />
-                  </div>
+                <div
+                  className="mb-4 px-4 py-2 rounded-lg text-sm font-bold text-white flex items-center gap-2"
+                  style={{ background: "oklch(0.45 0.2 25)" }}
+                  data-ocid="admin.success_state"
+                >
+                  🔥 Sale is LIVE — {sale.label} · {sale.discount}% OFF
                 </div>
               )}
+              <div className="flex flex-col gap-5">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="sale-enabled"
+                    checked={sale.enabled}
+                    onChange={(e) =>
+                      setSale((s) => ({ ...s, enabled: e.target.checked }))
+                    }
+                    data-ocid="admin.checkbox.1"
+                    className="w-4 h-4 accent-brand-gold cursor-pointer"
+                  />
+                  <label
+                    htmlFor="sale-enabled"
+                    className="font-bold text-sm text-foreground cursor-pointer select-none"
+                  >
+                    Enable Sale
+                  </label>
+                </div>
+
+                {sale.enabled && (
+                  <div className="grid sm:grid-cols-2 gap-4 animate-fade-in">
+                    <div>
+                      <label
+                        htmlFor="sale-discount"
+                        className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                      >
+                        Discount %
+                      </label>
+                      <input
+                        id="sale-discount"
+                        type="number"
+                        min="1"
+                        max="90"
+                        value={sale.discount}
+                        onChange={(e) =>
+                          setSale((s) => ({
+                            ...s,
+                            discount: Math.min(
+                              90,
+                              Math.max(1, Number(e.target.value)),
+                            ),
+                          }))
+                        }
+                        data-ocid="admin.input"
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="sale-label"
+                        className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                      >
+                        Sale Label
+                      </label>
+                      <input
+                        id="sale-label"
+                        type="text"
+                        value={sale.label}
+                        onChange={(e) =>
+                          setSale((s) => ({ ...s, label: e.target.value }))
+                        }
+                        data-ocid="admin.input"
+                        placeholder="e.g. SUMMER SALE"
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* ── SITE APPEARANCE ── */}
-        <section>
-          <div className="flex items-center gap-2 mb-4">
-            <Palette size={16} className="text-brand-gold" />
-            <h2 className="font-display text-xl font-bold text-foreground">
-              Site Appearance
-            </h2>
-          </div>
-          <div className="bg-card border border-border rounded-xl p-6 shadow-card space-y-6">
-            {/* Banner Upload */}
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">
-                Hero Banner Image
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 items-start">
-                <div className="w-full sm:w-48 h-24 rounded-lg overflow-hidden border border-border bg-muted flex-shrink-0">
-                  <img
-                    src={bannerPreview || BANNER}
-                    alt="Banner preview"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="flex flex-col gap-3 flex-1">
-                  <label
-                    className="flex items-center gap-2 px-4 py-2.5 btn-outline-gold font-display font-bold text-xs rounded-lg cursor-pointer w-fit"
-                    data-ocid="admin.upload_button"
-                  >
-                    <Image size={14} /> Upload Banner Image
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleBannerFile}
+        {activeTab === "appearance" && (
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <Palette size={16} className="text-brand-gold" />
+              <h2 className="font-display text-xl font-bold text-foreground">
+                Site Appearance
+              </h2>
+            </div>
+            <div className="bg-card border border-border rounded-xl p-6 shadow-card space-y-6">
+              {/* Banner Upload */}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">
+                  Hero Banner Image
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 items-start">
+                  <div className="w-full sm:w-48 h-24 rounded-lg overflow-hidden border border-border bg-muted flex-shrink-0">
+                    <img
+                      src={bannerPreview || BANNER}
+                      alt="Banner preview"
+                      className="w-full h-full object-cover"
                     />
-                  </label>
-                  {bannerPreview && (
+                  </div>
+                  <div className="flex flex-col gap-3 flex-1">
+                    <label
+                      className="flex items-center gap-2 px-4 py-2.5 btn-outline-gold font-display font-bold text-xs rounded-lg cursor-pointer w-fit"
+                      data-ocid="admin.upload_button"
+                    >
+                      <Image size={14} /> Upload Banner Image
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleBannerFile}
+                      />
+                    </label>
+                    {bannerPreview && (
+                      <button
+                        type="button"
+                        onClick={() => setBannerPreview("")}
+                        className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-destructive transition-colors w-fit"
+                      >
+                        <X size={12} /> Reset to Default
+                      </button>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Upload a JPG or PNG to replace the hero banner.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Background Color */}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">
+                  Background Color
+                </p>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="color"
+                    value={bgColor}
+                    onChange={(e) => setBgColor(e.target.value)}
+                    data-ocid="admin.input"
+                    className="w-12 h-10 rounded-lg border border-border cursor-pointer bg-transparent"
+                  />
+                  <span className="font-mono text-sm text-foreground">
+                    {bgColor}
+                  </span>
+                  {bgColor !== "#0c0b09" && (
                     <button
                       type="button"
-                      onClick={() => setBannerPreview("")}
-                      className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-destructive transition-colors w-fit"
+                      onClick={() => setBgColor("#0c0b09")}
+                      className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-brand-gold transition-colors"
                     >
                       <X size={12} /> Reset to Default
                     </button>
                   )}
-                  <p className="text-xs text-muted-foreground">
-                    Upload a JPG or PNG to replace the hero banner.
-                  </p>
                 </div>
               </div>
             </div>
-
-            {/* Background Color */}
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">
-                Background Color
-              </p>
-              <div className="flex items-center gap-4">
-                <input
-                  type="color"
-                  value={bgColor}
-                  onChange={(e) => setBgColor(e.target.value)}
-                  data-ocid="admin.input"
-                  className="w-12 h-10 rounded-lg border border-border cursor-pointer bg-transparent"
-                />
-                <span className="font-mono text-sm text-foreground">
-                  {bgColor}
-                </span>
-                {bgColor !== "#0c0b09" && (
-                  <button
-                    type="button"
-                    onClick={() => setBgColor("#0c0b09")}
-                    className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-brand-gold transition-colors"
-                  >
-                    <X size={12} /> Reset to Default
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* ── PAYMENT METHODS ── */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <CreditCard size={16} className="text-brand-gold" />
-              <h2 className="font-display text-xl font-bold text-foreground">
-                Payment Methods
-              </h2>
+        {activeTab === "payments" && (
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <CreditCard size={16} className="text-brand-gold" />
+                <h2 className="font-display text-xl font-bold text-foreground">
+                  Payment Methods
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPaymentAddOpen((o) => !o)}
+                data-ocid="admin.open_modal_button"
+                className="flex items-center gap-2 px-4 py-2 btn-outline-gold font-display font-bold text-xs rounded-lg"
+              >
+                {paymentAddOpen ? (
+                  <>
+                    <X size={12} /> Collapse
+                  </>
+                ) : (
+                  <>
+                    <Plus size={12} /> Add Method
+                  </>
+                )}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setPaymentAddOpen((o) => !o)}
-              data-ocid="admin.open_modal_button"
-              className="flex items-center gap-2 px-4 py-2 btn-outline-gold font-display font-bold text-xs rounded-lg"
-            >
-              {paymentAddOpen ? (
-                <>
-                  <X size={12} /> Collapse
-                </>
-              ) : (
-                <>
-                  <Plus size={12} /> Add Method
-                </>
+            <div className="bg-card border border-border rounded-xl p-6 shadow-card space-y-4">
+              {payments.length === 0 && (
+                <p
+                  className="text-sm text-muted-foreground"
+                  data-ocid="admin.empty_state"
+                >
+                  No payment methods configured.
+                </p>
               )}
-            </button>
-          </div>
-          <div className="bg-card border border-border rounded-xl p-6 shadow-card space-y-4">
-            {payments.length === 0 && (
-              <p
-                className="text-sm text-muted-foreground"
-                data-ocid="admin.empty_state"
-              >
-                No payment methods configured.
-              </p>
-            )}
-            {payments.map((pm, i) => (
-              <div
-                key={pm.id}
-                className="flex items-center gap-3 p-3 border border-border rounded-lg"
-                data-ocid={`admin.item.${i + 1}`}
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="font-display font-bold text-sm text-foreground">
-                      {pm.label}
-                    </span>
-                    <span
-                      className="px-2 py-0.5 rounded text-xs font-bold uppercase"
-                      style={{
-                        background: "oklch(0.85 0.12 85 / 0.15)",
-                        color: "oklch(0.85 0.12 85)",
-                      }}
-                    >
-                      {pm.type}
-                    </span>
+              {payments.map((pm, i) => (
+                <div
+                  key={pm.id}
+                  className="flex items-center gap-3 p-3 border border-border rounded-lg"
+                  data-ocid={`admin.item.${i + 1}`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="font-display font-bold text-sm text-foreground">
+                        {pm.label}
+                      </span>
+                      <span
+                        className="px-2 py-0.5 rounded text-xs font-bold uppercase"
+                        style={{
+                          background: "oklch(0.85 0.12 85 / 0.15)",
+                          color: "oklch(0.85 0.12 85)",
+                        }}
+                      >
+                        {pm.type}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {pm.details}
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {pm.details}
-                  </p>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={pm.enabled}
+                      onChange={(e) =>
+                        setPayments((prev) =>
+                          prev.map((p) =>
+                            p.id === pm.id
+                              ? { ...p, enabled: e.target.checked }
+                              : p,
+                          ),
+                        )
+                      }
+                      data-ocid={`admin.toggle.${i + 1}`}
+                      className="w-4 h-4 accent-brand-gold cursor-pointer"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPayments((prev) =>
+                          prev.filter((p) => p.id !== pm.id),
+                        )
+                      }
+                      data-ocid={`admin.delete_button.${i + 1}`}
+                      className="p-1 text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
+              ))}
+              {paymentAddOpen && (
+                <div
+                  className="border border-brand-gold/30 rounded-xl p-5 animate-fade-in space-y-4 mt-2"
+                  data-ocid="admin.dialog"
+                >
+                  {newPayError && (
+                    <p
+                      className="text-xs text-destructive font-bold"
+                      data-ocid="admin.error_state"
+                    >
+                      {newPayError}
+                    </p>
+                  )}
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label
+                        htmlFor="pay-label-new"
+                        className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                      >
+                        Label *
+                      </label>
+                      <input
+                        id="pay-label-new"
+                        type="text"
+                        value={newPayLabel}
+                        onChange={(e) => setNewPayLabel(e.target.value)}
+                        placeholder="e.g. UPI Payment"
+                        data-ocid="admin.input"
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="pay-type"
+                        className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                      >
+                        Type
+                      </label>
+                      <select
+                        id="pay-type"
+                        value={newPayType}
+                        onChange={(e) => setNewPayType(e.target.value)}
+                        data-ocid="admin.select"
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                      >
+                        <option value="upi">UPI</option>
+                        <option value="card">Card</option>
+                        <option value="cod">Cash on Delivery</option>
+                        <option value="bank">Bank Transfer</option>
+                      </select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label
+                        htmlFor="pay-details"
+                        className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                      >
+                        Details
+                      </label>
+                      <input
+                        id="pay-details"
+                        type="text"
+                        value={newPayDetails}
+                        onChange={(e) => setNewPayDetails(e.target.value)}
+                        placeholder="e.g. yourupi@bank or instructions"
+                        data-ocid="admin.input"
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        id="pay-enabled"
+                        checked={newPayEnabled}
+                        onChange={(e) => setNewPayEnabled(e.target.checked)}
+                        data-ocid="admin.checkbox.3"
+                        className="w-4 h-4 accent-brand-gold cursor-pointer"
+                      />
+                      <label
+                        htmlFor="pay-enabled"
+                        className="text-sm font-bold text-foreground cursor-pointer select-none"
+                      >
+                        Enabled
+                      </label>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={handleAddPayment}
+                      data-ocid="admin.submit_button"
+                      className="flex items-center gap-2 px-5 py-2 btn-gold font-display font-bold text-sm rounded-lg"
+                    >
+                      <Plus size={13} /> Add
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentAddOpen(false);
+                        setNewPayError("");
+                      }}
+                      data-ocid="admin.cancel_button"
+                      className="flex items-center gap-2 px-4 py-2 btn-outline-gold font-display font-bold text-sm rounded-lg"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* ── PROMO CODES ── */}
+        {activeTab === "promos" && (
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Ticket size={16} className="text-brand-gold" />
+                <h2 className="font-display text-xl font-bold text-foreground">
+                  Promo Codes
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPromoAddOpen((o) => !o)}
+                data-ocid="admin.open_modal_button"
+                className="flex items-center gap-2 px-4 py-2 btn-outline-gold font-display font-bold text-xs rounded-lg"
+              >
+                {promoAddOpen ? (
+                  <>
+                    <X size={12} /> Collapse
+                  </>
+                ) : (
+                  <>
+                    <Plus size={12} /> Add Code
+                  </>
+                )}
+              </button>
+            </div>
+            <div className="bg-card border border-border rounded-xl p-6 shadow-card space-y-3">
+              {promos.length === 0 && (
+                <p
+                  className="text-sm text-muted-foreground"
+                  data-ocid="admin.empty_state"
+                >
+                  No promo codes yet.
+                </p>
+              )}
+              {promos.map((promo, i) => (
+                <div
+                  key={promo.id}
+                  className="flex items-center gap-3 p-3 border border-border rounded-lg"
+                  data-ocid={`admin.item.${i + 1}`}
+                >
+                  <span
+                    className="font-mono font-bold text-sm px-3 py-1 rounded-md"
+                    style={{
+                      background: "oklch(0.85 0.12 85 / 0.1)",
+                      color: "oklch(0.85 0.12 85)",
+                      border: "1px solid oklch(0.85 0.12 85 / 0.3)",
+                    }}
+                  >
+                    {promo.code}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    {promo.discount}% off
+                  </span>
+                  <div className="flex-1" />
                   <input
                     type="checkbox"
-                    checked={pm.enabled}
+                    checked={promo.enabled}
                     onChange={(e) =>
-                      setPayments((prev) =>
+                      setPromos((prev) =>
                         prev.map((p) =>
-                          p.id === pm.id
+                          p.id === promo.id
                             ? { ...p, enabled: e.target.checked }
                             : p,
                         ),
@@ -1600,7 +1953,7 @@ function AdminPanel({
                   <button
                     type="button"
                     onClick={() =>
-                      setPayments((prev) => prev.filter((p) => p.id !== pm.id))
+                      setPromos((prev) => prev.filter((p) => p.id !== promo.id))
                     }
                     data-ocid={`admin.delete_button.${i + 1}`}
                     className="p-1 text-muted-foreground hover:text-destructive transition-colors"
@@ -1608,659 +1961,556 @@ function AdminPanel({
                     <Trash2 size={14} />
                   </button>
                 </div>
-              </div>
-            ))}
-            {paymentAddOpen && (
-              <div
-                className="border border-brand-gold/30 rounded-xl p-5 animate-fade-in space-y-4 mt-2"
-                data-ocid="admin.dialog"
-              >
-                {newPayError && (
-                  <p
-                    className="text-xs text-destructive font-bold"
-                    data-ocid="admin.error_state"
-                  >
-                    {newPayError}
-                  </p>
-                )}
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div>
-                    <label
-                      htmlFor="pay-label-new"
-                      className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+              ))}
+              {promoAddOpen && (
+                <div
+                  className="border border-brand-gold/30 rounded-xl p-5 animate-fade-in space-y-4 mt-2"
+                  data-ocid="admin.dialog"
+                >
+                  {newPromoError && (
+                    <p
+                      className="text-xs text-destructive font-bold"
+                      data-ocid="admin.error_state"
                     >
-                      Label *
-                    </label>
-                    <input
-                      id="pay-label-new"
-                      type="text"
-                      value={newPayLabel}
-                      onChange={(e) => setNewPayLabel(e.target.value)}
-                      placeholder="e.g. UPI Payment"
-                      data-ocid="admin.input"
-                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
-                    />
+                      {newPromoError}
+                    </p>
+                  )}
+                  <div className="grid sm:grid-cols-3 gap-4">
+                    <div className="sm:col-span-2">
+                      <label
+                        htmlFor="promo-code"
+                        className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                      >
+                        Promo Code *
+                      </label>
+                      <input
+                        id="promo-code"
+                        type="text"
+                        value={newPromoCode}
+                        onChange={(e) =>
+                          setNewPromoCode(e.target.value.toUpperCase())
+                        }
+                        placeholder="e.g. SAVE10"
+                        data-ocid="admin.input"
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="promo-discount"
+                        className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                      >
+                        Discount %
+                      </label>
+                      <input
+                        id="promo-discount"
+                        type="number"
+                        min="1"
+                        max="90"
+                        value={newPromoDiscount}
+                        onChange={(e) =>
+                          setNewPromoDiscount(
+                            Math.min(90, Math.max(1, Number(e.target.value))),
+                          )
+                        }
+                        data-ocid="admin.input"
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        id="promo-enabled"
+                        checked={newPromoEnabled}
+                        onChange={(e) => setNewPromoEnabled(e.target.checked)}
+                        data-ocid="admin.checkbox.4"
+                        className="w-4 h-4 accent-brand-gold cursor-pointer"
+                      />
+                      <label
+                        htmlFor="promo-enabled"
+                        className="text-sm font-bold text-foreground cursor-pointer select-none"
+                      >
+                        Enabled
+                      </label>
+                    </div>
                   </div>
-                  <div>
-                    <label
-                      htmlFor="pay-type"
-                      className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={handleAddPromo}
+                      data-ocid="admin.submit_button"
+                      className="flex items-center gap-2 px-5 py-2 btn-gold font-display font-bold text-sm rounded-lg"
                     >
-                      Type
-                    </label>
-                    <select
-                      id="pay-type"
-                      value={newPayType}
-                      onChange={(e) => setNewPayType(e.target.value)}
-                      data-ocid="admin.select"
-                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                      <Plus size={13} /> Add Code
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPromoAddOpen(false);
+                        setNewPromoError("");
+                      }}
+                      data-ocid="admin.cancel_button"
+                      className="flex items-center gap-2 px-4 py-2 btn-outline-gold font-display font-bold text-sm rounded-lg"
                     >
-                      <option value="upi">UPI</option>
-                      <option value="card">Card</option>
-                      <option value="cod">Cash on Delivery</option>
-                      <option value="bank">Bank Transfer</option>
-                    </select>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label
-                      htmlFor="pay-details"
-                      className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
-                    >
-                      Details
-                    </label>
-                    <input
-                      id="pay-details"
-                      type="text"
-                      value={newPayDetails}
-                      onChange={(e) => setNewPayDetails(e.target.value)}
-                      placeholder="e.g. yourupi@bank or instructions"
-                      data-ocid="admin.input"
-                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
-                    />
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      id="pay-enabled"
-                      checked={newPayEnabled}
-                      onChange={(e) => setNewPayEnabled(e.target.checked)}
-                      data-ocid="admin.checkbox.3"
-                      className="w-4 h-4 accent-brand-gold cursor-pointer"
-                    />
-                    <label
-                      htmlFor="pay-enabled"
-                      className="text-sm font-bold text-foreground cursor-pointer select-none"
-                    >
-                      Enabled
-                    </label>
+                      Cancel
+                    </button>
                   </div>
                 </div>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={handleAddPayment}
-                    data-ocid="admin.submit_button"
-                    className="flex items-center gap-2 px-5 py-2 btn-gold font-display font-bold text-sm rounded-lg"
-                  >
-                    <Plus size={13} /> Add
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPaymentAddOpen(false);
-                      setNewPayError("");
-                    }}
-                    data-ocid="admin.cancel_button"
-                    className="flex items-center gap-2 px-4 py-2 btn-outline-gold font-display font-bold text-sm rounded-lg"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* ── PROMO CODES ── */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Ticket size={16} className="text-brand-gold" />
-              <h2 className="font-display text-xl font-bold text-foreground">
-                Promo Codes
-              </h2>
-            </div>
-            <button
-              type="button"
-              onClick={() => setPromoAddOpen((o) => !o)}
-              data-ocid="admin.open_modal_button"
-              className="flex items-center gap-2 px-4 py-2 btn-outline-gold font-display font-bold text-xs rounded-lg"
-            >
-              {promoAddOpen ? (
-                <>
-                  <X size={12} /> Collapse
-                </>
-              ) : (
-                <>
-                  <Plus size={12} /> Add Code
-                </>
               )}
-            </button>
-          </div>
-          <div className="bg-card border border-border rounded-xl p-6 shadow-card space-y-3">
-            {promos.length === 0 && (
-              <p
-                className="text-sm text-muted-foreground"
-                data-ocid="admin.empty_state"
-              >
-                No promo codes yet.
-              </p>
-            )}
-            {promos.map((promo, i) => (
-              <div
-                key={promo.id}
-                className="flex items-center gap-3 p-3 border border-border rounded-lg"
-                data-ocid={`admin.item.${i + 1}`}
-              >
-                <span
-                  className="font-mono font-bold text-sm px-3 py-1 rounded-md"
-                  style={{
-                    background: "oklch(0.85 0.12 85 / 0.1)",
-                    color: "oklch(0.85 0.12 85)",
-                    border: "1px solid oklch(0.85 0.12 85 / 0.3)",
-                  }}
-                >
-                  {promo.code}
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  {promo.discount}% off
-                </span>
-                <div className="flex-1" />
-                <input
-                  type="checkbox"
-                  checked={promo.enabled}
-                  onChange={(e) =>
-                    setPromos((prev) =>
-                      prev.map((p) =>
-                        p.id === promo.id
-                          ? { ...p, enabled: e.target.checked }
-                          : p,
-                      ),
-                    )
-                  }
-                  data-ocid={`admin.toggle.${i + 1}`}
-                  className="w-4 h-4 accent-brand-gold cursor-pointer"
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPromos((prev) => prev.filter((p) => p.id !== promo.id))
-                  }
-                  data-ocid={`admin.delete_button.${i + 1}`}
-                  className="p-1 text-muted-foreground hover:text-destructive transition-colors"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
-            {promoAddOpen && (
-              <div
-                className="border border-brand-gold/30 rounded-xl p-5 animate-fade-in space-y-4 mt-2"
-                data-ocid="admin.dialog"
-              >
-                {newPromoError && (
-                  <p
-                    className="text-xs text-destructive font-bold"
-                    data-ocid="admin.error_state"
-                  >
-                    {newPromoError}
-                  </p>
-                )}
-                <div className="grid sm:grid-cols-3 gap-4">
-                  <div className="sm:col-span-2">
-                    <label
-                      htmlFor="promo-code"
-                      className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
-                    >
-                      Promo Code *
-                    </label>
-                    <input
-                      id="promo-code"
-                      type="text"
-                      value={newPromoCode}
-                      onChange={(e) =>
-                        setNewPromoCode(e.target.value.toUpperCase())
-                      }
-                      placeholder="e.g. SAVE10"
-                      data-ocid="admin.input"
-                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="promo-discount"
-                      className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
-                    >
-                      Discount %
-                    </label>
-                    <input
-                      id="promo-discount"
-                      type="number"
-                      min="1"
-                      max="90"
-                      value={newPromoDiscount}
-                      onChange={(e) =>
-                        setNewPromoDiscount(
-                          Math.min(90, Math.max(1, Number(e.target.value))),
-                        )
-                      }
-                      data-ocid="admin.input"
-                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
-                    />
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      id="promo-enabled"
-                      checked={newPromoEnabled}
-                      onChange={(e) => setNewPromoEnabled(e.target.checked)}
-                      data-ocid="admin.checkbox.4"
-                      className="w-4 h-4 accent-brand-gold cursor-pointer"
-                    />
-                    <label
-                      htmlFor="promo-enabled"
-                      className="text-sm font-bold text-foreground cursor-pointer select-none"
-                    >
-                      Enabled
-                    </label>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={handleAddPromo}
-                    data-ocid="admin.submit_button"
-                    className="flex items-center gap-2 px-5 py-2 btn-gold font-display font-bold text-sm rounded-lg"
-                  >
-                    <Plus size={13} /> Add Code
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPromoAddOpen(false);
-                      setNewPromoError("");
-                    }}
-                    data-ocid="admin.cancel_button"
-                    className="flex items-center gap-2 px-4 py-2 btn-outline-gold font-display font-bold text-sm rounded-lg"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
+            </div>
+          </section>
+        )}
 
         {/* ── ADD NEW PRODUCT ── */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Plus size={16} className="text-brand-gold" />
-              <h2 className="font-display text-xl font-bold text-foreground">
-                Add New Product
-              </h2>
-            </div>
-            <button
-              type="button"
-              onClick={() => setAddOpen((o) => !o)}
-              data-ocid="admin.open_modal_button"
-              className="flex items-center gap-2 px-4 py-2 btn-outline-gold font-display font-bold text-xs rounded-lg"
-            >
-              {addOpen ? (
-                <>
-                  <X size={12} /> Collapse
-                </>
-              ) : (
-                <>
-                  <Plus size={12} /> New Product
-                </>
-              )}
-            </button>
-          </div>
-
-          {addOpen && (
-            <div
-              className="bg-card border border-brand-gold/30 rounded-xl p-6 shadow-card animate-fade-in"
-              data-ocid="admin.dialog"
-            >
-              {draftError && (
-                <p
-                  className="text-xs text-destructive mb-4 font-bold"
-                  data-ocid="admin.error_state"
-                >
-                  {draftError}
-                </p>
-              )}
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label
-                    htmlFor="draft-name"
-                    className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
-                  >
-                    Product Name *
-                  </label>
-                  <input
-                    id="draft-name"
-                    type="text"
-                    value={draft.name}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, name: e.target.value }))
-                    }
-                    data-ocid="admin.input"
-                    placeholder="e.g. ROCHER Hoodie"
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="draft-price"
-                    className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
-                  >
-                    Price (₹) *
-                  </label>
-                  <input
-                    id="draft-price"
-                    type="number"
-                    min="1"
-                    value={draft.price}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, price: e.target.value }))
-                    }
-                    data-ocid="admin.input"
-                    placeholder="e.g. 499"
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label
-                    htmlFor="draft-desc"
-                    className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
-                  >
-                    Description
-                  </label>
-                  <textarea
-                    id="draft-desc"
-                    value={draft.description}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, description: e.target.value }))
-                    }
-                    data-ocid="admin.textarea"
-                    rows={2}
-                    placeholder="Brief product description..."
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors resize-none"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="draft-stock"
-                    className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
-                  >
-                    Stock Count
-                  </label>
-                  <input
-                    id="draft-stock"
-                    type="number"
-                    min="0"
-                    value={draft.stock}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, stock: e.target.value }))
-                    }
-                    data-ocid="admin.input"
-                    placeholder="e.g. 10"
-                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
-                  />
-                </div>
-                <div className="flex items-center gap-3 pt-5">
-                  <input
-                    type="checkbox"
-                    id="draft-bs"
-                    checked={draft.bestSeller}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, bestSeller: e.target.checked }))
-                    }
-                    data-ocid="admin.checkbox.2"
-                    className="w-4 h-4 accent-brand-gold cursor-pointer"
-                  />
-                  <label
-                    htmlFor="draft-bs"
-                    className="text-sm font-bold text-foreground cursor-pointer select-none"
-                  >
-                    ★ Best Seller
-                  </label>
-                </div>
-
-                {/* Image URLs */}
-                <div className="sm:col-span-2">
-                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-2">
-                    Image URLs
-                  </p>
-                  <div className="flex flex-col gap-2">
-                    {draft.imageUrls.map((url, i) => (
-                      <ImageUrlField
-                        // biome-ignore lint/suspicious/noArrayIndexKey: image list reordering not supported
-                        key={i}
-                        value={url}
-                        onChange={(v) => updateImageUrl(i, v)}
-                        onRemove={() => removeImageUrl(i)}
-                        showRemove={draft.imageUrls.length > 1}
-                      />
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={addImageUrl}
-                    className="mt-2 flex items-center gap-1.5 text-xs font-bold text-brand-gold hover:text-brand-gold/70 transition-colors"
-                  >
-                    <Plus size={12} /> Add Image
-                  </button>
-                </div>
+        {activeTab === "products" && (
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Plus size={16} className="text-brand-gold" />
+                <h2 className="font-display text-xl font-bold text-foreground">
+                  Add New Product
+                </h2>
               </div>
-
-              <div className="flex gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={handleAddProduct}
-                  data-ocid="admin.submit_button"
-                  className="flex items-center gap-2 px-6 py-2.5 btn-gold font-display font-bold text-sm rounded-lg"
-                >
-                  <Plus size={14} /> Add Product
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDraft(EMPTY_DRAFT);
-                    setAddOpen(false);
-                    setDraftError("");
-                  }}
-                  data-ocid="admin.cancel_button"
-                  className="flex items-center gap-2 px-5 py-2.5 btn-outline-gold font-display font-bold text-sm rounded-lg"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* ── PRODUCTS LIST ── */}
-        <section>
-          <div className="mb-4">
-            <h2 className="font-display text-xl font-bold text-foreground mb-1">
-              Products ({editData.length})
-            </h2>
-            <p className="text-muted-foreground text-sm">
-              Edit details or delete products below.
-            </p>
-          </div>
-
-          {editData.length === 0 && (
-            <div
-              className="text-center py-16 text-muted-foreground"
-              data-ocid="admin.empty_state"
-            >
-              <p className="font-display text-sm">
-                No products yet. Add one above.
-              </p>
-            </div>
-          )}
-
-          <div className="flex flex-col gap-8">
-            {editData.map((p, idx) => (
-              <div
-                key={p.id}
-                className="bg-card border border-border rounded-xl p-6 shadow-card"
-                data-ocid={`admin.item.${idx + 1}`}
+              <button
+                type="button"
+                onClick={() => setAddOpen((o) => !o)}
+                data-ocid="admin.open_modal_button"
+                className="flex items-center gap-2 px-4 py-2 btn-outline-gold font-display font-bold text-xs rounded-lg"
               >
-                <div className="flex items-center justify-between mb-5">
-                  <div className="flex items-center gap-2">
-                    <span className="w-7 h-7 rounded-full bg-brand-gold/10 border border-brand-gold/30 text-brand-gold text-xs font-bold flex items-center justify-center">
-                      {idx + 1}
-                    </span>
-                    <h3 className="font-display text-lg font-bold text-foreground">
-                      {p.name}
-                    </h3>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `Delete "${p.name}"? This cannot be undone.`,
-                        )
-                      )
-                        deleteProduct(p.id);
-                    }}
-                    data-ocid={`admin.delete_button.${idx + 1}`}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors"
-                    style={{
-                      color: "oklch(0.65 0.2 25)",
-                      borderColor: "oklch(0.65 0.2 25 / 0.4)",
-                    }}
-                  >
-                    <Trash2 size={12} /> Delete
-                  </button>
-                </div>
+                {addOpen ? (
+                  <>
+                    <X size={12} /> Collapse
+                  </>
+                ) : (
+                  <>
+                    <Plus size={12} /> New Product
+                  </>
+                )}
+              </button>
+            </div>
 
+            {addOpen && (
+              <div
+                className="bg-card border border-brand-gold/30 rounded-xl p-6 shadow-card animate-fade-in"
+                data-ocid="admin.dialog"
+              >
+                {draftError && (
+                  <p
+                    className="text-xs text-destructive mb-4 font-bold"
+                    data-ocid="admin.error_state"
+                  >
+                    {draftError}
+                  </p>
+                )}
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>
                     <label
-                      htmlFor={`ap-name-${p.id}`}
+                      htmlFor="draft-name"
                       className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
                     >
-                      Product Name
+                      Product Name *
                     </label>
                     <input
-                      id={`ap-name-${p.id}`}
+                      id="draft-name"
                       type="text"
-                      value={p.name}
-                      onChange={(e) => update(p.id, "name", e.target.value)}
+                      value={draft.name}
+                      onChange={(e) =>
+                        setDraft((d) => ({ ...d, name: e.target.value }))
+                      }
+                      data-ocid="admin.input"
+                      placeholder="e.g. ROCHER Hoodie"
                       className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
                     />
                   </div>
                   <div>
                     <label
-                      htmlFor={`ap-price-${p.id}`}
+                      htmlFor="draft-price"
                       className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
                     >
-                      Price (₹)
+                      Price (₹) *
                     </label>
                     <input
-                      id={`ap-price-${p.id}`}
+                      id="draft-price"
                       type="number"
-                      value={p.price}
+                      min="1"
+                      value={draft.price}
                       onChange={(e) =>
-                        update(p.id, "price", Number(e.target.value))
+                        setDraft((d) => ({ ...d, price: e.target.value }))
                       }
+                      data-ocid="admin.input"
+                      placeholder="e.g. 499"
                       className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
                     />
                   </div>
                   <div className="sm:col-span-2">
                     <label
-                      htmlFor={`ap-desc-${p.id}`}
+                      htmlFor="draft-desc"
                       className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
                     >
                       Description
                     </label>
                     <textarea
-                      id={`ap-desc-${p.id}`}
-                      value={p.description}
+                      id="draft-desc"
+                      value={draft.description}
                       onChange={(e) =>
-                        update(p.id, "description", e.target.value)
+                        setDraft((d) => ({ ...d, description: e.target.value }))
                       }
+                      data-ocid="admin.textarea"
                       rows={2}
+                      placeholder="Brief product description..."
                       className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors resize-none"
                     />
                   </div>
                   <div>
                     <label
-                      htmlFor={`ap-stock-${p.id}`}
+                      htmlFor="draft-stock"
                       className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
                     >
                       Stock Count
                     </label>
                     <input
-                      id={`ap-stock-${p.id}`}
+                      id="draft-stock"
                       type="number"
                       min="0"
-                      value={p.stock}
+                      value={draft.stock}
                       onChange={(e) =>
-                        update(p.id, "stock", Number(e.target.value))
+                        setDraft((d) => ({ ...d, stock: e.target.value }))
                       }
+                      data-ocid="admin.input"
+                      placeholder="e.g. 10"
                       className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
                     />
                   </div>
                   <div className="flex items-center gap-3 pt-5">
                     <input
                       type="checkbox"
-                      id={`bs-${p.id}`}
-                      checked={p.bestSeller}
+                      id="draft-bs"
+                      checked={draft.bestSeller}
                       onChange={(e) =>
-                        update(p.id, "bestSeller", e.target.checked)
+                        setDraft((d) => ({
+                          ...d,
+                          bestSeller: e.target.checked,
+                        }))
                       }
-                      data-ocid={`admin.checkbox.${idx + 3}`}
+                      data-ocid="admin.checkbox.2"
                       className="w-4 h-4 accent-brand-gold cursor-pointer"
                     />
                     <label
-                      htmlFor={`bs-${p.id}`}
+                      htmlFor="draft-bs"
                       className="text-sm font-bold text-foreground cursor-pointer select-none"
                     >
-                      ★ Mark as Best Seller
+                      ★ Best Seller
                     </label>
                   </div>
+
+                  {/* Image URLs */}
+                  <div className="sm:col-span-2">
+                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-2">
+                      Image URLs
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      {draft.imageUrls.map((url, i) => (
+                        <ImageUrlField
+                          // biome-ignore lint/suspicious/noArrayIndexKey: image list reordering not supported
+                          key={i}
+                          value={url}
+                          onChange={(v) => updateImageUrl(i, v)}
+                          onRemove={() => removeImageUrl(i)}
+                          showRemove={draft.imageUrls.length > 1}
+                        />
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={addImageUrl}
+                      className="mt-2 flex items-center gap-1.5 text-xs font-bold text-brand-gold hover:text-brand-gold/70 transition-colors"
+                    >
+                      <Plus size={12} /> Add Image
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={handleAddProduct}
+                    data-ocid="admin.submit_button"
+                    className="flex items-center gap-2 px-6 py-2.5 btn-gold font-display font-bold text-sm rounded-lg"
+                  >
+                    <Plus size={14} /> Add Product
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDraft(EMPTY_DRAFT);
+                      setAddOpen(false);
+                      setDraftError("");
+                    }}
+                    data-ocid="admin.cancel_button"
+                    className="flex items-center gap-2 px-5 py-2.5 btn-outline-gold font-display font-bold text-sm rounded-lg"
+                  >
+                    Cancel
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
-        </section>
+            )}
+          </section>
+        )}
 
-        <div className="flex gap-3 justify-end pb-4">
-          <button
-            type="button"
-            onClick={handleSave}
-            data-ocid="admin.save_button"
-            className="flex items-center gap-2 px-6 py-3 btn-gold font-display font-bold text-sm rounded-lg"
-          >
-            <Save size={15} /> Save All Changes
-          </button>
-          <button
-            type="button"
-            onClick={() => onClose()}
-            data-ocid="admin.close_button"
-            className="flex items-center gap-2 px-5 py-3 btn-outline-gold font-display font-bold text-sm rounded-lg"
-          >
-            Cancel
-          </button>
-        </div>
+        {/* ── PRODUCTS LIST ── */}
+        {activeTab === "products" && (
+          <section>
+            <div className="mb-4">
+              <h2 className="font-display text-xl font-bold text-foreground mb-1">
+                Products ({editData.length})
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                Edit details or delete products below.
+              </p>
+            </div>
+
+            {editData.length === 0 && (
+              <div
+                className="text-center py-16 text-muted-foreground"
+                data-ocid="admin.empty_state"
+              >
+                <p className="font-display text-sm">
+                  No products yet. Add one above.
+                </p>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-8">
+              {editData.map((p, idx) => (
+                <div
+                  key={p.id}
+                  className="bg-card border border-border rounded-xl p-6 shadow-card"
+                  data-ocid={`admin.item.${idx + 1}`}
+                >
+                  <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-7 h-7 rounded-full bg-brand-gold/10 border border-brand-gold/30 text-brand-gold text-xs font-bold flex items-center justify-center">
+                        {idx + 1}
+                      </span>
+                      <h3 className="font-display text-lg font-bold text-foreground">
+                        {p.name}
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Delete "${p.name}"? This cannot be undone.`,
+                          )
+                        )
+                          deleteProduct(p.id);
+                      }}
+                      data-ocid={`admin.delete_button.${idx + 1}`}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors"
+                      style={{
+                        color: "oklch(0.65 0.2 25)",
+                        borderColor: "oklch(0.65 0.2 25 / 0.4)",
+                      }}
+                    >
+                      <Trash2 size={12} /> Delete
+                    </button>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label
+                        htmlFor={`ap-name-${p.id}`}
+                        className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                      >
+                        Product Name
+                      </label>
+                      <input
+                        id={`ap-name-${p.id}`}
+                        type="text"
+                        value={p.name}
+                        onChange={(e) => update(p.id, "name", e.target.value)}
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor={`ap-price-${p.id}`}
+                        className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                      >
+                        Price (₹)
+                      </label>
+                      <input
+                        id={`ap-price-${p.id}`}
+                        type="number"
+                        value={p.price}
+                        onChange={(e) =>
+                          update(p.id, "price", Number(e.target.value))
+                        }
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label
+                        htmlFor={`ap-desc-${p.id}`}
+                        className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                      >
+                        Description
+                      </label>
+                      <textarea
+                        id={`ap-desc-${p.id}`}
+                        value={p.description}
+                        onChange={(e) =>
+                          update(p.id, "description", e.target.value)
+                        }
+                        rows={2}
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors resize-none"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor={`ap-stock-${p.id}`}
+                        className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                      >
+                        Stock Count
+                      </label>
+                      <input
+                        id={`ap-stock-${p.id}`}
+                        type="number"
+                        min="0"
+                        value={p.stock}
+                        onChange={(e) =>
+                          update(p.id, "stock", Number(e.target.value))
+                        }
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3 pt-5">
+                      <input
+                        type="checkbox"
+                        id={`bs-${p.id}`}
+                        checked={p.bestSeller}
+                        onChange={(e) =>
+                          update(p.id, "bestSeller", e.target.checked)
+                        }
+                        data-ocid={`admin.checkbox.${idx + 3}`}
+                        className="w-4 h-4 accent-brand-gold cursor-pointer"
+                      />
+                      <label
+                        htmlFor={`bs-${p.id}`}
+                        className="text-sm font-bold text-foreground cursor-pointer select-none"
+                      >
+                        ★ Mark as Best Seller
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+        {activeTab === "products" && (
+          <div className="flex gap-3 justify-end pb-4">
+            <button
+              type="button"
+              onClick={handleSave}
+              data-ocid="admin.save_button"
+              className="flex items-center gap-2 px-6 py-3 btn-gold font-display font-bold text-sm rounded-lg"
+            >
+              <Save size={15} /> Save All Changes
+            </button>
+            <button
+              type="button"
+              onClick={() => onClose()}
+              data-ocid="admin.close_button"
+              className="flex items-center gap-2 px-5 py-3 btn-outline-gold font-display font-bold text-sm rounded-lg"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {/* ── ORDERS ── */}
+        {activeTab === "orders" && (
+          <section>
+            <div className="flex items-center gap-2 mb-6">
+              <PackageCheck size={16} className="text-brand-gold" />
+              <h2 className="font-display text-xl font-bold text-foreground">
+                Customer Orders
+              </h2>
+            </div>
+            {orders.length === 0 ? (
+              <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground font-display">
+                No orders yet. Orders placed by customers will appear here.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {orders.map((order) => (
+                  <div
+                    key={order.id}
+                    className="bg-card border border-border rounded-xl p-5 shadow-card"
+                  >
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-display font-bold text-foreground text-base">
+                            {order.product}
+                          </span>
+                          <span
+                            className={`text-xs font-bold px-2 py-0.5 rounded uppercase tracking-widest ${order.status === "placed" ? "bg-green-900/40 text-green-400" : "bg-red-900/40 text-red-400"}`}
+                          >
+                            {order.status === "placed"
+                              ? "✅ Placed"
+                              : "❌ Cancelled"}
+                          </span>
+                          {order.viaInstagram && (
+                            <span className="text-xs px-2 py-0.5 rounded bg-purple-900/40 text-purple-300">
+                              📸 Instagram
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Size: <b className="text-foreground">{order.size}</b>{" "}
+                          · Qty: <b className="text-foreground">{order.qty}</b>{" "}
+                          · <b className="text-brand-gold">₹{order.price}</b>
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Payment: {order.paymentMethod}
+                          {order.promoCode
+                            ? ` · Promo: ${order.promoCode}`
+                            : ""}
+                        </p>
+                        <div className="mt-2 p-3 bg-background/60 rounded-lg border border-border">
+                          <p className="text-xs font-bold text-brand-gold uppercase tracking-widest mb-1">
+                            Customer Details
+                          </p>
+                          <p className="text-sm text-foreground font-bold">
+                            {order.name} · {order.phone}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {order.address}
+                          </p>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {new Date(order.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      {order.status === "placed" && (
+                        <button
+                          type="button"
+                          onClick={() => handleCancelOrder(order.id)}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-display font-bold text-xs uppercase tracking-widest border border-red-500/40 text-red-400 hover:bg-red-900/20 transition-colors whitespace-nowrap"
+                        >
+                          <PackageX size={14} /> Cancel Order
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </div>
     </div>
   );
