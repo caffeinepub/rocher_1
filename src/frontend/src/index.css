@@ -1,0 +1,232 @@
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=Satoshi:wght@300;400;500;700&display=swap");
+
+@font-face {
+  font-family: "Playfair Display";
+  src: url("/assets/fonts/PlayfairDisplay.woff2") format("woff2");
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.5rem;
+    /* Classic luxury dark palette */
+    --background: 0.09 0.008 60;
+    --foreground: 0.96 0.008 85;
+    --card: 0.13 0.008 60;
+    --card-foreground: 0.96 0.008 85;
+    --popover: 0.11 0.008 60;
+    --popover-foreground: 0.96 0.008 85;
+    --primary: 0.78 0.12 85;
+    --primary-foreground: 0.09 0.008 60;
+    --secondary: 0.17 0.008 60;
+    --secondary-foreground: 0.96 0.008 85;
+    --muted: 0.19 0.006 60;
+    --muted-foreground: 0.58 0.006 80;
+    --accent: 0.78 0.12 85;
+    --accent-foreground: 0.09 0.008 60;
+    --destructive: 0.577 0.245 27.325;
+    --destructive-foreground: 0.985 0 0;
+    --border: 0.22 0.008 60;
+    --input: 0.22 0.008 60;
+    --ring: 0.78 0.12 85;
+    --chart-1: 0.78 0.12 85;
+    --chart-2: 0.6 0.118 184.704;
+    --chart-3: 0.398 0.07 227.392;
+    --chart-4: 0.828 0.189 84.429;
+    --chart-5: 0.769 0.188 70.08;
+    --sidebar: 0.1 0.008 60;
+    --sidebar-foreground: 0.96 0.008 85;
+    --sidebar-primary: 0.78 0.12 85;
+    --sidebar-primary-foreground: 0.09 0.008 60;
+    --sidebar-accent: 0.19 0.008 60;
+    --sidebar-accent-foreground: 0.96 0.008 85;
+    --sidebar-border: 0.22 0.008 60;
+    --sidebar-ring: 0.78 0.12 85;
+    /* Brand tokens */
+    --brand-gold: 0.78 0.12 85;
+    --brand-gold-dim: 0.65 0.1 85;
+    --brand-black: 0.09 0.008 60;
+    --brand-cream: 0.96 0.008 85;
+  }
+
+  * {
+    @apply border-border;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Satoshi", sans-serif;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: "Playfair Display", "Georgia", serif;
+  }
+  .text-brand-gold {
+    color: oklch(var(--brand-gold));
+  }
+  .bg-brand-gold {
+    background-color: oklch(var(--brand-gold));
+  }
+  .border-brand-gold {
+    border-color: oklch(var(--brand-gold));
+  }
+  .shadow-gold-glow {
+    box-shadow: 0 0 20px oklch(0.78 0.12 85 / 0.35), 0 4px 16px
+      rgba(0, 0, 0, 0.3);
+  }
+  .shadow-gold-glow-sm {
+    box-shadow: 0 0 10px oklch(0.78 0.12 85 / 0.2);
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(40px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes slideInRight {
+    from {
+      opacity: 0;
+      transform: translateX(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .animate-fade-in-up {
+    animation: fadeInUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  .animate-fade-in {
+    animation: fadeIn 0.6s ease-out forwards;
+  }
+  .animate-slide-in-right {
+    animation: slideInRight 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .delay-100 {
+    animation-delay: 0.1s;
+  }
+  .delay-200 {
+    animation-delay: 0.2s;
+  }
+  .delay-300 {
+    animation-delay: 0.3s;
+  }
+  .delay-400 {
+    animation-delay: 0.4s;
+  }
+  .delay-600 {
+    animation-delay: 0.6s;
+  }
+
+  .product-img-wrap {
+    overflow: hidden;
+  }
+  .product-img-wrap img {
+    transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+  .product-img-wrap:hover img {
+    transform: scale(1.07);
+  }
+
+  .scroll-reveal {
+    opacity: 0;
+    transform: translateY(32px);
+    transition: opacity 0.75s ease-out, transform 0.75s ease-out;
+  }
+  .scroll-reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .gold-divider {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      oklch(0.78 0.12 85 / 0.6),
+      transparent
+    );
+  }
+
+  .best-seller-ribbon {
+    position: absolute;
+    top: 16px;
+    left: -4px;
+    background: linear-gradient(
+      135deg,
+      oklch(0.78 0.12 85) 0%,
+      oklch(0.68 0.14 80) 100%
+    );
+    color: oklch(0.09 0.008 60);
+    font-family: "Playfair Display", serif;
+    font-weight: 700;
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 4px 12px 4px 10px;
+    clip-path: polygon(
+      0 0,
+      calc(100% - 8px) 0,
+      100% 50%,
+      calc(100% - 8px) 100%,
+      0 100%
+    );
+    z-index: 10;
+    box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.4);
+  }
+
+  .btn-gold {
+    background: linear-gradient(
+      135deg,
+      oklch(0.78 0.12 85) 0%,
+      oklch(0.72 0.13 82) 100%
+    );
+    color: oklch(0.09 0.008 60);
+    transition: all 0.25s ease;
+  }
+  .btn-gold:hover {
+    box-shadow: 0 0 20px oklch(0.78 0.12 85 / 0.35), 0 4px 16px
+      rgba(0, 0, 0, 0.3);
+    transform: translateY(-1px);
+  }
+  .btn-gold:active {
+    transform: translateY(0) scale(0.97);
+  }
+
+  .btn-outline-gold {
+    border: 1px solid oklch(0.78 0.12 85 / 0.5);
+    color: oklch(0.78 0.12 85);
+    background: transparent;
+    transition: all 0.25s ease;
+  }
+  .btn-outline-gold:hover {
+    border-color: oklch(0.78 0.12 85);
+    background: oklch(0.78 0.12 85 / 0.08);
+    box-shadow: 0 0 10px oklch(0.78 0.12 85 / 0.2);
+  }
+}
