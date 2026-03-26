@@ -1,15 +1,20 @@
 import { Toaster } from "@/components/ui/sonner";
 import {
+  Check,
   ChevronDown,
+  CreditCard,
+  Image,
   Instagram,
   Lock,
   LogOut,
   Menu,
+  Palette,
   Plus,
   Save,
   ShieldCheck,
   ShoppingCart,
   Tag,
+  Ticket,
   Trash2,
   X,
 } from "lucide-react";
@@ -25,6 +30,10 @@ const SIZES = ["S", "M", "L", "XL"];
 const ADMIN_PASSWORD = "rocher2024";
 const LS_KEY = "rocher_admin_data";
 const LS_SALE_KEY = "rocher_sale_settings";
+const LS_PROMO_KEY = "rocher_promo_codes";
+const LS_PAYMENT_KEY = "rocher_payment_methods";
+const LS_BANNER_KEY = "rocher_custom_banner";
+const LS_BG_KEY = "rocher_custom_bg";
 
 const SIZE_GUIDE = [
   { size: "S", chest: '36"', waist: '30"', length: '27"' },
@@ -56,6 +65,21 @@ interface SaleSettings {
   enabled: boolean;
   discount: number;
   label: string;
+}
+
+interface PromoCode {
+  id: string;
+  code: string;
+  discount: number;
+  enabled: boolean;
+}
+
+interface PaymentMethod {
+  id: string;
+  type: string;
+  label: string;
+  details: string;
+  enabled: boolean;
 }
 
 const DEFAULT_PRODUCTS: Product[] = [
@@ -129,6 +153,59 @@ function loadSaleSettings(): SaleSettings {
     return JSON.parse(raw) as SaleSettings;
   } catch {
     return { enabled: false, discount: 20, label: "SALE" };
+  }
+}
+
+function loadPromoCodes(): PromoCode[] {
+  try {
+    const raw = localStorage.getItem(LS_PROMO_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as PromoCode[];
+  } catch {
+    return [];
+  }
+}
+
+function loadPaymentMethods(): PaymentMethod[] {
+  try {
+    const raw = localStorage.getItem(LS_PAYMENT_KEY);
+    if (!raw)
+      return [
+        {
+          id: "cod",
+          type: "cod",
+          label: "Cash on Delivery",
+          details: "Pay when you receive your order",
+          enabled: true,
+        },
+      ];
+    return JSON.parse(raw) as PaymentMethod[];
+  } catch {
+    return [
+      {
+        id: "cod",
+        type: "cod",
+        label: "Cash on Delivery",
+        details: "Pay when you receive your order",
+        enabled: true,
+      },
+    ];
+  }
+}
+
+function loadCustomBanner(): string {
+  try {
+    return localStorage.getItem(LS_BANNER_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function loadCustomBg(): string {
+  try {
+    return localStorage.getItem(LS_BG_KEY) || "";
+  } catch {
+    return "";
   }
 }
 
@@ -617,11 +694,26 @@ const EMPTY_DRAFT: NewProductDraft = {
 function AdminPanel({
   products,
   saleSettings,
+  promoCodes: initialPromos,
+  paymentMethods: initialPayments,
+  customBanner: initialBanner,
+  customBg: initialBg,
   onClose,
 }: {
   products: Product[];
   saleSettings: SaleSettings;
-  onClose: (updated?: Product[], newSale?: SaleSettings) => void;
+  promoCodes: PromoCode[];
+  paymentMethods: PaymentMethod[];
+  customBanner: string;
+  customBg: string;
+  onClose: (
+    updated?: Product[],
+    newSale?: SaleSettings,
+    newPromos?: PromoCode[],
+    newPayments?: PaymentMethod[],
+    newBanner?: string,
+    newBg?: string,
+  ) => void;
 }) {
   const [editData, setEditData] = useState<AdminProduct[]>(
     products.map((p) => ({
@@ -639,6 +731,21 @@ function AdminPanel({
   const [addOpen, setAddOpen] = useState(false);
   const [draft, setDraft] = useState<NewProductDraft>(EMPTY_DRAFT);
   const [draftError, setDraftError] = useState("");
+  const [promos, setPromos] = useState<PromoCode[]>(initialPromos);
+  const [payments, setPayments] = useState<PaymentMethod[]>(initialPayments);
+  const [bannerPreview, setBannerPreview] = useState<string>(initialBanner);
+  const [bgColor, setBgColor] = useState<string>(initialBg || "#0c0b09");
+  const [promoAddOpen, setPromoAddOpen] = useState(false);
+  const [paymentAddOpen, setPaymentAddOpen] = useState(false);
+  const [newPromoCode, setNewPromoCode] = useState("");
+  const [newPromoDiscount, setNewPromoDiscount] = useState(10);
+  const [newPromoEnabled, setNewPromoEnabled] = useState(true);
+  const [newPromoError, setNewPromoError] = useState("");
+  const [newPayLabel, setNewPayLabel] = useState("");
+  const [newPayType, setNewPayType] = useState("upi");
+  const [newPayDetails, setNewPayDetails] = useState("");
+  const [newPayEnabled, setNewPayEnabled] = useState(true);
+  const [newPayError, setNewPayError] = useState("");
 
   const update = (
     id: string,
@@ -723,6 +830,18 @@ function AdminPanel({
     };
     localStorage.setItem(LS_KEY, JSON.stringify(saveData));
     localStorage.setItem(LS_SALE_KEY, JSON.stringify(sale));
+    localStorage.setItem(LS_PROMO_KEY, JSON.stringify(promos));
+    localStorage.setItem(LS_PAYMENT_KEY, JSON.stringify(payments));
+    if (bannerPreview) {
+      localStorage.setItem(LS_BANNER_KEY, bannerPreview);
+    } else {
+      localStorage.removeItem(LS_BANNER_KEY);
+    }
+    if (bgColor && bgColor !== "#0c0b09") {
+      localStorage.setItem(LS_BG_KEY, bgColor);
+    } else {
+      localStorage.removeItem(LS_BG_KEY);
+    }
 
     // Reconstruct full product list
     const merged: Product[] = DEFAULT_PRODUCTS.filter(
@@ -742,7 +861,75 @@ function AdminPanel({
 
     const allProducts = [...merged, ...customProducts];
     toast.success("Changes saved successfully");
-    onClose(allProducts, sale);
+    onClose(
+      allProducts,
+      sale,
+      promos,
+      payments,
+      bannerPreview,
+      bgColor !== "#0c0b09" ? bgColor : "",
+    );
+  };
+
+  const handleAddPromo = () => {
+    const code = newPromoCode.trim().toUpperCase();
+    if (!code) {
+      setNewPromoError("Code is required.");
+      return;
+    }
+    if (promos.some((p) => p.code === code)) {
+      setNewPromoError("Code already exists.");
+      return;
+    }
+    setNewPromoError("");
+    setPromos((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        code,
+        discount: newPromoDiscount,
+        enabled: newPromoEnabled,
+      },
+    ]);
+    setNewPromoCode("");
+    setNewPromoDiscount(10);
+    setNewPromoEnabled(true);
+    setPromoAddOpen(false);
+    toast.success(`Promo code ${code} added!`);
+  };
+
+  const handleAddPayment = () => {
+    if (!newPayLabel.trim()) {
+      setNewPayError("Label is required.");
+      return;
+    }
+    setNewPayError("");
+    setPayments((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        type: newPayType,
+        label: newPayLabel.trim(),
+        details: newPayDetails.trim(),
+        enabled: newPayEnabled,
+      },
+    ]);
+    setNewPayLabel("");
+    setNewPayType("upi");
+    setNewPayDetails("");
+    setNewPayEnabled(true);
+    setPaymentAddOpen(false);
+    toast.success("Payment method added!");
+  };
+
+  const handleBannerFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setBannerPreview(ev.target?.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -890,6 +1077,467 @@ function AdminPanel({
                 </div>
               )}
             </div>
+          </div>
+        </section>
+
+        {/* ── SITE APPEARANCE ── */}
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <Palette size={16} className="text-brand-gold" />
+            <h2 className="font-display text-xl font-bold text-foreground">
+              Site Appearance
+            </h2>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-6 shadow-card space-y-6">
+            {/* Banner Upload */}
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">
+                Hero Banner Image
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 items-start">
+                <div className="w-full sm:w-48 h-24 rounded-lg overflow-hidden border border-border bg-muted flex-shrink-0">
+                  <img
+                    src={bannerPreview || BANNER}
+                    alt="Banner preview"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="flex flex-col gap-3 flex-1">
+                  <label
+                    className="flex items-center gap-2 px-4 py-2.5 btn-outline-gold font-display font-bold text-xs rounded-lg cursor-pointer w-fit"
+                    data-ocid="admin.upload_button"
+                  >
+                    <Image size={14} /> Upload Banner Image
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleBannerFile}
+                    />
+                  </label>
+                  {bannerPreview && (
+                    <button
+                      type="button"
+                      onClick={() => setBannerPreview("")}
+                      className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-destructive transition-colors w-fit"
+                    >
+                      <X size={12} /> Reset to Default
+                    </button>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Upload a JPG or PNG to replace the hero banner.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Background Color */}
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">
+                Background Color
+              </p>
+              <div className="flex items-center gap-4">
+                <input
+                  type="color"
+                  value={bgColor}
+                  onChange={(e) => setBgColor(e.target.value)}
+                  data-ocid="admin.input"
+                  className="w-12 h-10 rounded-lg border border-border cursor-pointer bg-transparent"
+                />
+                <span className="font-mono text-sm text-foreground">
+                  {bgColor}
+                </span>
+                {bgColor !== "#0c0b09" && (
+                  <button
+                    type="button"
+                    onClick={() => setBgColor("#0c0b09")}
+                    className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-brand-gold transition-colors"
+                  >
+                    <X size={12} /> Reset to Default
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── PAYMENT METHODS ── */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <CreditCard size={16} className="text-brand-gold" />
+              <h2 className="font-display text-xl font-bold text-foreground">
+                Payment Methods
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPaymentAddOpen((o) => !o)}
+              data-ocid="admin.open_modal_button"
+              className="flex items-center gap-2 px-4 py-2 btn-outline-gold font-display font-bold text-xs rounded-lg"
+            >
+              {paymentAddOpen ? (
+                <>
+                  <X size={12} /> Collapse
+                </>
+              ) : (
+                <>
+                  <Plus size={12} /> Add Method
+                </>
+              )}
+            </button>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-6 shadow-card space-y-4">
+            {payments.length === 0 && (
+              <p
+                className="text-sm text-muted-foreground"
+                data-ocid="admin.empty_state"
+              >
+                No payment methods configured.
+              </p>
+            )}
+            {payments.map((pm, i) => (
+              <div
+                key={pm.id}
+                className="flex items-center gap-3 p-3 border border-border rounded-lg"
+                data-ocid={`admin.item.${i + 1}`}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="font-display font-bold text-sm text-foreground">
+                      {pm.label}
+                    </span>
+                    <span
+                      className="px-2 py-0.5 rounded text-xs font-bold uppercase"
+                      style={{
+                        background: "oklch(0.85 0.12 85 / 0.15)",
+                        color: "oklch(0.85 0.12 85)",
+                      }}
+                    >
+                      {pm.type}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {pm.details}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={pm.enabled}
+                    onChange={(e) =>
+                      setPayments((prev) =>
+                        prev.map((p) =>
+                          p.id === pm.id
+                            ? { ...p, enabled: e.target.checked }
+                            : p,
+                        ),
+                      )
+                    }
+                    data-ocid={`admin.toggle.${i + 1}`}
+                    className="w-4 h-4 accent-brand-gold cursor-pointer"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPayments((prev) => prev.filter((p) => p.id !== pm.id))
+                    }
+                    data-ocid={`admin.delete_button.${i + 1}`}
+                    className="p-1 text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+            {paymentAddOpen && (
+              <div
+                className="border border-brand-gold/30 rounded-xl p-5 animate-fade-in space-y-4 mt-2"
+                data-ocid="admin.dialog"
+              >
+                {newPayError && (
+                  <p
+                    className="text-xs text-destructive font-bold"
+                    data-ocid="admin.error_state"
+                  >
+                    {newPayError}
+                  </p>
+                )}
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <label
+                      htmlFor="pay-label-new"
+                      className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                    >
+                      Label *
+                    </label>
+                    <input
+                      id="pay-label-new"
+                      type="text"
+                      value={newPayLabel}
+                      onChange={(e) => setNewPayLabel(e.target.value)}
+                      placeholder="e.g. UPI Payment"
+                      data-ocid="admin.input"
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="pay-type"
+                      className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                    >
+                      Type
+                    </label>
+                    <select
+                      id="pay-type"
+                      value={newPayType}
+                      onChange={(e) => setNewPayType(e.target.value)}
+                      data-ocid="admin.select"
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                    >
+                      <option value="upi">UPI</option>
+                      <option value="card">Card</option>
+                      <option value="cod">Cash on Delivery</option>
+                      <option value="bank">Bank Transfer</option>
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label
+                      htmlFor="pay-details"
+                      className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                    >
+                      Details
+                    </label>
+                    <input
+                      id="pay-details"
+                      type="text"
+                      value={newPayDetails}
+                      onChange={(e) => setNewPayDetails(e.target.value)}
+                      placeholder="e.g. yourupi@bank or instructions"
+                      data-ocid="admin.input"
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                    />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="pay-enabled"
+                      checked={newPayEnabled}
+                      onChange={(e) => setNewPayEnabled(e.target.checked)}
+                      data-ocid="admin.checkbox.3"
+                      className="w-4 h-4 accent-brand-gold cursor-pointer"
+                    />
+                    <label
+                      htmlFor="pay-enabled"
+                      className="text-sm font-bold text-foreground cursor-pointer select-none"
+                    >
+                      Enabled
+                    </label>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handleAddPayment}
+                    data-ocid="admin.submit_button"
+                    className="flex items-center gap-2 px-5 py-2 btn-gold font-display font-bold text-sm rounded-lg"
+                  >
+                    <Plus size={13} /> Add
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentAddOpen(false);
+                      setNewPayError("");
+                    }}
+                    data-ocid="admin.cancel_button"
+                    className="flex items-center gap-2 px-4 py-2 btn-outline-gold font-display font-bold text-sm rounded-lg"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* ── PROMO CODES ── */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Ticket size={16} className="text-brand-gold" />
+              <h2 className="font-display text-xl font-bold text-foreground">
+                Promo Codes
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPromoAddOpen((o) => !o)}
+              data-ocid="admin.open_modal_button"
+              className="flex items-center gap-2 px-4 py-2 btn-outline-gold font-display font-bold text-xs rounded-lg"
+            >
+              {promoAddOpen ? (
+                <>
+                  <X size={12} /> Collapse
+                </>
+              ) : (
+                <>
+                  <Plus size={12} /> Add Code
+                </>
+              )}
+            </button>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-6 shadow-card space-y-3">
+            {promos.length === 0 && (
+              <p
+                className="text-sm text-muted-foreground"
+                data-ocid="admin.empty_state"
+              >
+                No promo codes yet.
+              </p>
+            )}
+            {promos.map((promo, i) => (
+              <div
+                key={promo.id}
+                className="flex items-center gap-3 p-3 border border-border rounded-lg"
+                data-ocid={`admin.item.${i + 1}`}
+              >
+                <span
+                  className="font-mono font-bold text-sm px-3 py-1 rounded-md"
+                  style={{
+                    background: "oklch(0.85 0.12 85 / 0.1)",
+                    color: "oklch(0.85 0.12 85)",
+                    border: "1px solid oklch(0.85 0.12 85 / 0.3)",
+                  }}
+                >
+                  {promo.code}
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  {promo.discount}% off
+                </span>
+                <div className="flex-1" />
+                <input
+                  type="checkbox"
+                  checked={promo.enabled}
+                  onChange={(e) =>
+                    setPromos((prev) =>
+                      prev.map((p) =>
+                        p.id === promo.id
+                          ? { ...p, enabled: e.target.checked }
+                          : p,
+                      ),
+                    )
+                  }
+                  data-ocid={`admin.toggle.${i + 1}`}
+                  className="w-4 h-4 accent-brand-gold cursor-pointer"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPromos((prev) => prev.filter((p) => p.id !== promo.id))
+                  }
+                  data-ocid={`admin.delete_button.${i + 1}`}
+                  className="p-1 text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+            {promoAddOpen && (
+              <div
+                className="border border-brand-gold/30 rounded-xl p-5 animate-fade-in space-y-4 mt-2"
+                data-ocid="admin.dialog"
+              >
+                {newPromoError && (
+                  <p
+                    className="text-xs text-destructive font-bold"
+                    data-ocid="admin.error_state"
+                  >
+                    {newPromoError}
+                  </p>
+                )}
+                <div className="grid sm:grid-cols-3 gap-4">
+                  <div className="sm:col-span-2">
+                    <label
+                      htmlFor="promo-code"
+                      className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                    >
+                      Promo Code *
+                    </label>
+                    <input
+                      id="promo-code"
+                      type="text"
+                      value={newPromoCode}
+                      onChange={(e) =>
+                        setNewPromoCode(e.target.value.toUpperCase())
+                      }
+                      placeholder="e.g. SAVE10"
+                      data-ocid="admin.input"
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="promo-discount"
+                      className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                    >
+                      Discount %
+                    </label>
+                    <input
+                      id="promo-discount"
+                      type="number"
+                      min="1"
+                      max="90"
+                      value={newPromoDiscount}
+                      onChange={(e) =>
+                        setNewPromoDiscount(
+                          Math.min(90, Math.max(1, Number(e.target.value))),
+                        )
+                      }
+                      data-ocid="admin.input"
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                    />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="promo-enabled"
+                      checked={newPromoEnabled}
+                      onChange={(e) => setNewPromoEnabled(e.target.checked)}
+                      data-ocid="admin.checkbox.4"
+                      className="w-4 h-4 accent-brand-gold cursor-pointer"
+                    />
+                    <label
+                      htmlFor="promo-enabled"
+                      className="text-sm font-bold text-foreground cursor-pointer select-none"
+                    >
+                      Enabled
+                    </label>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handleAddPromo}
+                    data-ocid="admin.submit_button"
+                    className="flex items-center gap-2 px-5 py-2 btn-gold font-display font-bold text-sm rounded-lg"
+                  >
+                    <Plus size={13} /> Add Code
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPromoAddOpen(false);
+                      setNewPromoError("");
+                    }}
+                    data-ocid="admin.cancel_button"
+                    className="flex items-center gap-2 px-4 py-2 btn-outline-gold font-display font-bold text-sm rounded-lg"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
@@ -1458,13 +2106,41 @@ function CartDrawer({
   onClose,
   onRemove,
   onUpdateQty,
+  promoCodes,
+  paymentMethods,
 }: {
   cart: CartItem[];
   onClose: () => void;
   onRemove: (id: string) => void;
   onUpdateQty: (id: string, qty: number) => void;
+  promoCodes: PromoCode[];
+  paymentMethods: PaymentMethod[];
 }) {
   const total = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null);
+  const [promoError, setPromoError] = useState("");
+  const enabledPayments = paymentMethods.filter((pm) => pm.enabled);
+  const [selectedPayment, setSelectedPayment] = useState<string>(
+    () => enabledPayments[0]?.id || "",
+  );
+
+  const applyPromo = () => {
+    const code = promoInput.trim().toUpperCase();
+    const found = promoCodes.find((p) => p.code === code && p.enabled);
+    if (found) {
+      setAppliedPromo(found);
+      setPromoError("");
+    } else {
+      setPromoError("Invalid or expired promo code");
+      setAppliedPromo(null);
+    }
+  };
+
+  const discountedTotal = appliedPromo
+    ? Math.round(total * (1 - appliedPromo.discount / 100))
+    : total;
+
   return (
     <div className="fixed inset-0 z-50" data-ocid="cart.modal">
       <div
@@ -1554,15 +2230,131 @@ function CartDrawer({
                 </div>
               ))}
             </div>
-            <div className="p-5 border-t border-border">
-              <div className="flex justify-between items-center mb-4">
+            <div className="p-5 border-t border-border space-y-4">
+              {/* Promo Code */}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">
+                  Promo Code
+                </p>
+                {appliedPromo ? (
+                  <div
+                    className="flex items-center justify-between px-3 py-2 rounded-lg"
+                    style={{
+                      background: "oklch(0.85 0.12 85 / 0.1)",
+                      border: "1px solid oklch(0.85 0.12 85 / 0.3)",
+                    }}
+                    data-ocid="cart.success_state"
+                  >
+                    <span
+                      className="flex items-center gap-1.5 text-xs font-bold"
+                      style={{ color: "oklch(0.85 0.12 85)" }}
+                    >
+                      <Check size={13} /> {appliedPromo.code} —{" "}
+                      {appliedPromo.discount}% OFF
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAppliedPromo(null);
+                        setPromoInput("");
+                      }}
+                      className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={promoInput}
+                      onChange={(e) =>
+                        setPromoInput(e.target.value.toUpperCase())
+                      }
+                      onKeyDown={(e) => e.key === "Enter" && applyPromo()}
+                      placeholder="Enter code"
+                      data-ocid="cart.input"
+                      className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={applyPromo}
+                      data-ocid="cart.secondary_button"
+                      className="px-4 py-2 btn-outline-gold font-display font-bold text-xs rounded-lg"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                )}
+                {promoError && (
+                  <p
+                    className="text-xs text-destructive mt-1 font-bold"
+                    data-ocid="cart.error_state"
+                  >
+                    {promoError}
+                  </p>
+                )}
+              </div>
+
+              {/* Total */}
+              <div className="flex justify-between items-center">
                 <span className="font-display text-xs uppercase tracking-widest text-muted-foreground">
                   Total
                 </span>
-                <span className="font-display font-bold text-xl text-brand-gold">
-                  ₹{total}
-                </span>
+                <div className="text-right">
+                  {appliedPromo && (
+                    <p className="text-xs text-muted-foreground line-through">
+                      ₹{total}
+                    </p>
+                  )}
+                  <span className="font-display font-bold text-xl text-brand-gold">
+                    ₹{discountedTotal}
+                  </span>
+                </div>
               </div>
+
+              {/* Payment Methods */}
+              {enabledPayments.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">
+                    Payment Method
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {enabledPayments.map((pm) => (
+                      <button
+                        key={pm.id}
+                        type="button"
+                        onClick={() => setSelectedPayment(pm.id)}
+                        data-ocid="cart.toggle"
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold font-display transition-all"
+                        style={
+                          selectedPayment === pm.id
+                            ? {
+                                background: "oklch(0.85 0.12 85)",
+                                color: "oklch(0.09 0.008 60)",
+                              }
+                            : {
+                                background: "transparent",
+                                border: "1px solid oklch(0.3 0.02 60)",
+                                color: "oklch(0.7 0.02 60)",
+                              }
+                        }
+                      >
+                        {pm.label}
+                      </button>
+                    ))}
+                  </div>
+                  {selectedPayment && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {
+                        enabledPayments.find((pm) => pm.id === selectedPayment)
+                          ?.details
+                      }
+                    </p>
+                  )}
+                </div>
+              )}
+
               <a
                 href={INSTAGRAM_URL}
                 target="_blank"
@@ -1584,6 +2376,16 @@ function CartDrawer({
 export default function App() {
   const [products, setProducts] = useState<Product[]>(() => loadProducts());
   const [sale, setSale] = useState<SaleSettings>(() => loadSaleSettings());
+  const [promoCodes, setPromoCodes] = useState<PromoCode[]>(() =>
+    loadPromoCodes(),
+  );
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(() =>
+    loadPaymentMethods(),
+  );
+  const [customBanner, setCustomBanner] = useState<string>(() =>
+    loadCustomBanner(),
+  );
+  const [customBg, setCustomBg] = useState<string>(() => loadCustomBg());
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -1652,7 +2454,10 @@ export default function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div
+      className="min-h-screen bg-background text-foreground"
+      style={customBg ? { backgroundColor: customBg } : undefined}
+    >
       <Toaster position="top-right" theme="dark" />
 
       {/* HEADER */}
@@ -1765,7 +2570,7 @@ export default function App() {
       >
         <div className="absolute inset-0">
           <img
-            src={BANNER}
+            src={customBanner || BANNER}
             alt="ROCHER Banner"
             className="w-full h-full object-cover"
             onError={(e) => {
@@ -1942,6 +2747,8 @@ export default function App() {
       {cartOpen && (
         <CartDrawer
           cart={cart}
+          promoCodes={promoCodes}
+          paymentMethods={paymentMethods}
           onClose={() => setCartOpen(false)}
           onRemove={removeFromCart}
           onUpdateQty={updateQty}
@@ -1973,9 +2780,24 @@ export default function App() {
         <AdminPanel
           products={products}
           saleSettings={sale}
-          onClose={(updated, newSale) => {
+          promoCodes={promoCodes}
+          paymentMethods={paymentMethods}
+          customBanner={customBanner}
+          customBg={customBg}
+          onClose={(
+            updated,
+            newSale,
+            newPromos,
+            newPayments,
+            newBanner,
+            newBg,
+          ) => {
             if (updated) setProducts(updated);
             if (newSale) setSale(newSale);
+            if (newPromos !== undefined) setPromoCodes(newPromos);
+            if (newPayments !== undefined) setPaymentMethods(newPayments);
+            if (newBanner !== undefined) setCustomBanner(newBanner);
+            if (newBg !== undefined) setCustomBg(newBg);
             setShowAdminPanel(false);
           }}
         />
