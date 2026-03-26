@@ -1,23 +1,29 @@
 import { Toaster } from "@/components/ui/sonner";
 import {
   Check,
+  CheckCircle,
   ChevronDown,
   CreditCard,
   Image,
   Instagram,
   Lock,
+  LogIn,
   LogOut,
   Menu,
+  Package,
   PackageCheck,
   PackageX,
   Palette,
   Plus,
+  RotateCcw,
   Save,
   ShieldCheck,
   ShoppingCart,
   Tag,
   Ticket,
   Trash2,
+  Truck,
+  User,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -37,6 +43,9 @@ const LS_PAYMENT_KEY = "rocher_payment_methods";
 const LS_BANNER_KEY = "rocher_custom_banner";
 const LS_BG_KEY = "rocher_custom_bg";
 const LS_ORDERS_KEY = "rocher_orders";
+const LS_ACTIVITY_KEY = "rocher_activity_log";
+const LS_GOOGLE_USER_KEY = "rocher_google_user";
+const ADMIN_GMAIL = "tchhillar493@gmail.com";
 
 const SIZE_GUIDE = [
   { size: "S", chest: '36"', waist: '30"', length: '27"' },
@@ -89,6 +98,12 @@ interface Order {
   id: string;
   createdAt: string;
   status: "placed" | "cancelled";
+  trackingStatus:
+    | "placed"
+    | "packed"
+    | "shipped"
+    | "out_for_delivery"
+    | "delivered";
   product: string;
   size: string;
   qty: number;
@@ -99,6 +114,20 @@ interface Order {
   phone: string;
   address: string;
   viaInstagram: boolean;
+}
+
+interface ActivityLog {
+  id: string;
+  timestamp: string;
+  actor: string;
+  action: string;
+  details: string;
+}
+
+interface GoogleUser {
+  email: string;
+  name: string;
+  picture?: string;
 }
 
 function loadOrders(): Order[] {
@@ -116,6 +145,11 @@ function saveOrder(order: Order) {
     const existing = loadOrders();
     const updated = [order, ...existing];
     localStorage.setItem(LS_ORDERS_KEY, JSON.stringify(updated));
+    logActivity(
+      "customer",
+      "Order Placed",
+      `${order.name} ordered ${order.product} (${order.size}) - ₹${order.price} via ${order.viaInstagram ? "Instagram" : "Direct"}`,
+    );
   } catch {}
 }
 
@@ -126,6 +160,78 @@ function cancelOrder(orderId: string) {
       o.id === orderId ? { ...o, status: "cancelled" as const } : o,
     );
     localStorage.setItem(LS_ORDERS_KEY, JSON.stringify(updated));
+    logActivity(
+      "admin",
+      "Order Cancelled by Admin",
+      `Order ${orderId.slice(-6)} cancelled`,
+    );
+  } catch {}
+}
+
+function logActivity(actor: string, action: string, details: string) {
+  try {
+    const raw = localStorage.getItem(LS_ACTIVITY_KEY);
+    const logs: ActivityLog[] = raw ? JSON.parse(raw) : [];
+    const entry: ActivityLog = {
+      id: Date.now().toString() + Math.random().toString(36).slice(2, 5),
+      timestamp: new Date().toISOString(),
+      actor,
+      action,
+      details,
+    };
+    logs.unshift(entry);
+    localStorage.setItem(LS_ACTIVITY_KEY, JSON.stringify(logs.slice(0, 500)));
+  } catch {}
+}
+
+function loadActivityLog(): ActivityLog[] {
+  try {
+    const raw = localStorage.getItem(LS_ACTIVITY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function loadGoogleUser(): GoogleUser | null {
+  try {
+    const raw = localStorage.getItem(LS_GOOGLE_USER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function updateOrderTrackingStatus(
+  orderId: string,
+  trackingStatus: Order["trackingStatus"],
+) {
+  try {
+    const existing = loadOrders();
+    const updated = existing.map((o) =>
+      o.id === orderId ? { ...o, trackingStatus } : o,
+    );
+    localStorage.setItem(LS_ORDERS_KEY, JSON.stringify(updated));
+    logActivity(
+      "admin",
+      "Order Status Updated",
+      `Order ${orderId.slice(-6)} → ${trackingStatus.replace(/_/g, " ")}`,
+    );
+  } catch {}
+}
+
+function customerCancelOrder(orderId: string, phone: string) {
+  try {
+    const existing = loadOrders();
+    const updated = existing.map((o) =>
+      o.id === orderId ? { ...o, status: "cancelled" as const } : o,
+    );
+    localStorage.setItem(LS_ORDERS_KEY, JSON.stringify(updated));
+    logActivity(
+      `customer:${phone}`,
+      "Order Cancelled",
+      `Customer cancelled order ${orderId.slice(-6)}`,
+    );
   } catch {}
 }
 
@@ -674,6 +780,7 @@ function CheckoutModal({
       id: Date.now().toString() + Math.random().toString(36).slice(2, 7),
       createdAt: new Date().toISOString(),
       status: "placed",
+      trackingStatus: "placed" as const,
       product: item!.name,
       size: item!.size,
       qty: item!.qty,
@@ -934,6 +1041,18 @@ function CheckoutModal({
             </>
           )}
 
+          {/* Return Policy */}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3 px-1">
+            <RotateCcw size={12} className="text-brand-gold flex-shrink-0" />
+            <span>
+              <span className="text-brand-gold font-bold">
+                7-Day Return Policy
+              </span>{" "}
+              — Not satisfied? Return within 7 days of delivery for a full
+              refund.
+            </span>
+          </div>
+
           {/* Order Total */}
           <div className="bg-background/60 rounded-lg p-4 border border-border mb-5">
             <div className="flex justify-between text-sm text-muted-foreground mb-1">
@@ -978,6 +1097,332 @@ function CheckoutModal({
               <PackageCheck size={18} /> Place Direct Order
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── GOOGLE LOGIN MODAL ─── */
+function GoogleLoginModal({
+  onSuccess,
+  onClose,
+}: { onSuccess: (user: GoogleUser) => void; onClose: () => void }) {
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [err, setErr] = useState("");
+  const [step, setStep] = useState<"email" | "name">("email");
+
+  const handleContinue = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.includes("@")) {
+      setErr("Enter a valid Gmail address");
+      return;
+    }
+    if (step === "email") {
+      setStep("name");
+      setErr("");
+      return;
+    }
+    if (!name.trim()) {
+      setErr("Enter your name");
+      return;
+    }
+    const user: GoogleUser = {
+      email: email.trim().toLowerCase(),
+      name: name.trim(),
+    };
+    localStorage.setItem(LS_GOOGLE_USER_KEY, JSON.stringify(user));
+    logActivity(user.email, "Login", "Logged in via Google");
+    onSuccess(user);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/80 backdrop-blur-md animate-fade-in"
+        onClick={onClose}
+        role="button"
+        tabIndex={-1}
+        aria-label="Close"
+        onKeyDown={(e) => e.key === "Enter" && onClose()}
+      />
+      <div className="relative z-10 bg-white rounded-2xl p-8 w-full max-w-sm shadow-2xl animate-fade-in-up">
+        {/* Google logo header */}
+        <div className="text-center mb-6">
+          <div className="text-4xl mb-3">G</div>
+          <h2 className="text-gray-800 text-xl font-semibold">
+            Sign in with Google
+          </h2>
+          <p className="text-gray-500 text-sm mt-1">
+            {step === "email"
+              ? "Enter your Gmail to continue"
+              : "Enter your name"}
+          </p>
+        </div>
+        <form onSubmit={handleContinue} className="flex flex-col gap-3">
+          {step === "email" ? (
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setErr("");
+              }}
+              className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-800 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+              placeholder="yourname@gmail.com"
+            />
+          ) : (
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setErr("");
+              }}
+              className="w-full border border-gray-300 rounded-lg px-4 py-3 text-gray-800 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+              placeholder="Your full name"
+            />
+          )}
+          {err && <p className="text-xs text-red-500">{err}</p>}
+          <button
+            type="submit"
+            className="w-full py-3 rounded-lg font-semibold text-sm text-white"
+            style={{ background: "#4285F4" }}
+          >
+            {step === "email" ? "Next" : "Sign In"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-3 rounded-lg font-semibold text-sm text-gray-600 hover:bg-gray-100 transition-colors"
+          >
+            Cancel
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ─── TRACK ORDER MODAL ─── */
+function TrackOrderModal({ onClose }: { onClose: () => void }) {
+  const [phone, setPhone] = useState("");
+  const [searched, setSearched] = useState(false);
+  const [foundOrders, setFoundOrders] = useState<Order[]>([]);
+
+  const TRACKING_STEPS: { key: Order["trackingStatus"]; label: string }[] = [
+    { key: "placed", label: "Order Placed" },
+    { key: "packed", label: "Packed" },
+    { key: "shipped", label: "Shipped" },
+    { key: "out_for_delivery", label: "Out for Delivery" },
+    { key: "delivered", label: "Delivered" },
+  ];
+
+  const stepIndex = (ts: Order["trackingStatus"]) =>
+    TRACKING_STEPS.findIndex((s) => s.key === ts);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const all = loadOrders();
+    const results = all.filter(
+      (o) => o.phone.replace(/\s/g, "") === phone.replace(/\s/g, ""),
+    );
+    setFoundOrders(results);
+    setSearched(true);
+  };
+
+  const handleCancel = (orderId: string) => {
+    customerCancelOrder(orderId, phone);
+    setFoundOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId ? { ...o, status: "cancelled" as const } : o,
+      ),
+    );
+    toast.success("Order cancellation request submitted.");
+  };
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/80 backdrop-blur-md animate-fade-in"
+        onClick={onClose}
+        role="button"
+        tabIndex={-1}
+        aria-label="Close"
+        onKeyDown={(e) => e.key === "Enter" && onClose()}
+      />
+      <div className="relative z-10 bg-card border border-border rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl animate-fade-in-up">
+        <div className="flex items-center justify-between p-6 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Truck size={18} className="text-brand-gold" />
+            <h2 className="font-display text-lg font-bold text-foreground">
+              Track Your Order
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1 text-muted-foreground hover:text-brand-gold transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="p-6">
+          <form onSubmit={handleSearch} className="flex gap-2 mb-6">
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="flex-1 bg-background border border-border rounded-lg px-4 py-2.5 text-foreground text-sm focus:outline-none focus:border-brand-gold transition-colors"
+              placeholder="Enter your phone number"
+            />
+            <button
+              type="submit"
+              className="px-5 py-2.5 btn-gold font-display font-bold text-xs uppercase tracking-widest rounded-lg"
+            >
+              Search
+            </button>
+          </form>
+
+          {searched && foundOrders.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground font-display text-sm">
+              No orders found for this phone number.
+            </div>
+          )}
+
+          {foundOrders.map((order) => {
+            const currentStep =
+              order.status === "cancelled"
+                ? -1
+                : stepIndex(order.trackingStatus || "placed");
+            return (
+              <div
+                key={order.id}
+                className="bg-background/60 border border-border rounded-xl p-5 mb-4"
+              >
+                <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                  <div>
+                    <p className="font-display font-bold text-foreground">
+                      {order.product}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Size: {order.size} · ₹{order.price} ·{" "}
+                      {new Date(order.createdAt).toLocaleDateString()}
+                    </p>
+                    <p className="text-xs text-muted-foreground/60">
+                      Order #{order.id.slice(-8)}
+                    </p>
+                  </div>
+                  {order.status === "cancelled" ? (
+                    <span className="text-xs font-bold px-3 py-1 rounded-full bg-red-900/30 text-red-400">
+                      Cancelled
+                    </span>
+                  ) : order.trackingStatus === "delivered" ? (
+                    <span className="text-xs font-bold px-3 py-1 rounded-full bg-green-900/30 text-green-400">
+                      Delivered
+                    </span>
+                  ) : (
+                    <span
+                      className="text-xs font-bold px-3 py-1 rounded-full"
+                      style={{
+                        background: "oklch(0.85 0.12 85 / 0.1)",
+                        color: "oklch(0.85 0.12 85)",
+                      }}
+                    >
+                      Active
+                    </span>
+                  )}
+                </div>
+
+                {order.status !== "cancelled" && (
+                  <div className="mt-4 mb-3">
+                    <div className="flex items-center justify-between relative">
+                      <div className="absolute left-0 right-0 top-4 h-0.5 bg-border z-0" />
+                      <div
+                        className="absolute left-0 top-4 h-0.5 z-0 transition-all duration-500"
+                        style={{
+                          background: "oklch(0.85 0.12 85)",
+                          width:
+                            currentStep <= 0
+                              ? "0%"
+                              : `${(currentStep / (TRACKING_STEPS.length - 1)) * 100}%`,
+                        }}
+                      />
+                      {TRACKING_STEPS.map((step, i) => {
+                        const done = i <= currentStep;
+                        return (
+                          <div
+                            key={step.key}
+                            className="flex flex-col items-center z-10 flex-1"
+                          >
+                            <div
+                              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all"
+                              style={
+                                done
+                                  ? {
+                                      background: "oklch(0.85 0.12 85)",
+                                      borderColor: "oklch(0.85 0.12 85)",
+                                      color: "oklch(0.09 0.008 60)",
+                                    }
+                                  : {
+                                      background: "oklch(0.12 0.01 60)",
+                                      borderColor: "oklch(0.3 0.02 60)",
+                                      color: "oklch(0.5 0.02 60)",
+                                    }
+                              }
+                            >
+                              {done ? <Check size={14} /> : i + 1}
+                            </div>
+                            <p
+                              className="text-center mt-1.5 leading-tight"
+                              style={{
+                                fontSize: "9px",
+                                color: done
+                                  ? "oklch(0.85 0.12 85)"
+                                  : "oklch(0.5 0.02 60)",
+                                maxWidth: "52px",
+                              }}
+                            >
+                              {step.label}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {order.status === "placed" &&
+                  (order.trackingStatus === "placed" ||
+                    order.trackingStatus === "packed") && (
+                    <button
+                      type="button"
+                      onClick={() => handleCancel(order.id)}
+                      className="mt-3 w-full py-2 font-display font-bold text-xs uppercase tracking-widest rounded-lg border border-red-500/40 text-red-400 hover:bg-red-900/20 transition-colors"
+                    >
+                      Cancel Order
+                    </button>
+                  )}
+
+                <div className="mt-3 pt-3 border-t border-border/50">
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <RotateCcw size={10} className="text-brand-gold" />
+                    7-Day Return Policy applies — Contact us on Instagram to
+                    return.
+                  </p>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -1212,7 +1657,13 @@ function AdminPanel({
   const [newPayError, setNewPayError] = useState("");
   const [orders, setOrders] = useState<Order[]>(() => loadOrders());
   const [activeTab, setActiveTab] = useState<
-    "products" | "sale" | "payments" | "promos" | "appearance" | "orders"
+    | "products"
+    | "sale"
+    | "payments"
+    | "promos"
+    | "appearance"
+    | "orders"
+    | "activity"
   >("products");
 
   const refreshOrders = () => setOrders(loadOrders());
@@ -1469,6 +1920,7 @@ function AdminPanel({
             [
               { key: "products", label: "Products", icon: "📦" },
               { key: "orders", label: "Orders", icon: "🧾" },
+              { key: "activity", label: "Activity Log", icon: "📋" },
               { key: "sale", label: "Sale", icon: "🔥" },
               { key: "payments", label: "Payments", icon: "💳" },
               { key: "promos", label: "Promos", icon: "🎟️" },
@@ -2463,6 +2915,19 @@ function AdminPanel({
                               ? "✅ Placed"
                               : "❌ Cancelled"}
                           </span>
+                          {order.status === "placed" &&
+                            order.trackingStatus &&
+                            order.trackingStatus !== "placed" && (
+                              <span
+                                className="text-xs font-bold px-2 py-0.5 rounded uppercase tracking-widest"
+                                style={{
+                                  background: "oklch(0.85 0.12 85 / 0.1)",
+                                  color: "oklch(0.85 0.12 85)",
+                                }}
+                              >
+                                {order.trackingStatus.replace(/_/g, " ")}
+                              </span>
+                            )}
                           {order.viaInstagram && (
                             <span className="text-xs px-2 py-0.5 rounded bg-purple-900/40 text-purple-300">
                               📸 Instagram
@@ -2496,13 +2961,34 @@ function AdminPanel({
                         </p>
                       </div>
                       {order.status === "placed" && (
-                        <button
-                          type="button"
-                          onClick={() => handleCancelOrder(order.id)}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-display font-bold text-xs uppercase tracking-widest border border-red-500/40 text-red-400 hover:bg-red-900/20 transition-colors whitespace-nowrap"
-                        >
-                          <PackageX size={14} /> Cancel Order
-                        </button>
+                        <div className="flex flex-col gap-2 items-end">
+                          <select
+                            value={order.trackingStatus || "placed"}
+                            onChange={(e) => {
+                              updateOrderTrackingStatus(
+                                order.id,
+                                e.target.value as Order["trackingStatus"],
+                              );
+                              refreshOrders();
+                            }}
+                            className="bg-background border border-border rounded-lg px-3 py-1.5 text-xs text-foreground font-display focus:outline-none focus:border-brand-gold"
+                          >
+                            <option value="placed">Order Placed</option>
+                            <option value="packed">Packed</option>
+                            <option value="shipped">Shipped</option>
+                            <option value="out_for_delivery">
+                              Out for Delivery
+                            </option>
+                            <option value="delivered">Delivered</option>
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => handleCancelOrder(order.id)}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-display font-bold text-xs uppercase tracking-widest border border-red-500/40 text-red-400 hover:bg-red-900/20 transition-colors whitespace-nowrap"
+                          >
+                            <PackageX size={14} /> Cancel Order
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -2511,7 +2997,92 @@ function AdminPanel({
             )}
           </section>
         )}
+
+        {activeTab === "activity" && (
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Tag size={16} className="text-brand-gold" />
+                <h2 className="font-display text-xl font-bold text-foreground">
+                  Activity Log
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.removeItem(LS_ACTIVITY_KEY);
+                  toast.success("Activity log cleared");
+                }}
+                className="flex items-center gap-2 px-4 py-2 btn-outline-gold font-display font-bold text-xs rounded-lg"
+              >
+                <Trash2 size={12} /> Clear Log
+              </button>
+            </div>
+            <ActivityLogPanel />
+          </section>
+        )}
       </div>
+    </div>
+  );
+}
+
+function ActivityLogPanel() {
+  const [logs, setLogs] = useState<ActivityLog[]>(() => loadActivityLog());
+  useEffect(() => {
+    const interval = setInterval(() => setLogs(loadActivityLog()), 3000);
+    return () => clearInterval(interval);
+  }, []);
+  if (logs.length === 0) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground font-display text-sm">
+        No activity recorded yet. Actions taken by admin and customers will
+        appear here.
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2 max-h-[60vh] overflow-y-auto pr-1">
+      {logs.map((log) => {
+        const isAdmin = log.actor === "admin";
+        const isLogin =
+          log.action.toLowerCase().includes("login") ||
+          log.action.toLowerCase().includes("logout");
+        const dotColor = isLogin
+          ? "oklch(0.75 0.12 300)"
+          : isAdmin
+            ? "oklch(0.85 0.12 85)"
+            : "oklch(0.7 0.15 160)";
+        return (
+          <div
+            key={log.id}
+            className="bg-card border border-border rounded-lg p-3 flex items-start gap-3"
+          >
+            <div
+              className="w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0"
+              style={{ background: dotColor }}
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-display font-bold text-xs text-foreground">
+                  {log.action}
+                </span>
+                <span
+                  className="text-xs px-2 py-0.5 rounded font-mono"
+                  style={{ background: "oklch(0.15 0.01 60)", color: dotColor }}
+                >
+                  {log.actor}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                {log.details}
+              </p>
+              <p className="text-xs text-muted-foreground/50 mt-0.5">
+                {new Date(log.timestamp).toLocaleString()}
+              </p>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -2655,9 +3226,19 @@ function ProductCard({
         <p className="text-muted-foreground text-sm mb-1">
           {product.description}
         </p>
-        <p className="text-xs text-muted-foreground/60 italic mb-5">
+        <p className="text-xs text-muted-foreground/60 italic mb-3">
           100% Premium Cotton
         </p>
+        <div
+          className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full mb-4"
+          style={{
+            background: "oklch(0.85 0.12 85 / 0.1)",
+            color: "oklch(0.85 0.12 85)",
+            border: "1px solid oklch(0.85 0.12 85 / 0.3)",
+          }}
+        >
+          <RotateCcw size={10} /> 7-Day Returns
+        </div>
 
         <div className="gold-divider mb-5" />
 
@@ -3032,6 +3613,11 @@ export default function App() {
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [checkoutItem, setCheckoutItem] = useState<CheckoutItem | null>(null);
+  const [googleUser, setGoogleUser] = useState<GoogleUser | null>(() =>
+    loadGoogleUser(),
+  );
+  const [showGoogleLogin, setShowGoogleLogin] = useState(false);
+  const [showTrackOrder, setShowTrackOrder] = useState(false);
 
   const handleDirectBuy = useCallback((item: CheckoutItem) => {
     setCheckoutItem(item);
@@ -3076,19 +3662,40 @@ export default function App() {
     logoClickTimer.current = setTimeout(() => setLogoClickCount(0), 3000);
     if (newCount >= 5) {
       setLogoClickCount(0);
-      setShowAdminLogin(true);
+      if (googleUser && googleUser.email === ADMIN_GMAIL) {
+        logActivity(
+          googleUser.email,
+          "Admin Panel Opened",
+          "Admin accessed panel via Google login",
+        );
+        setShowAdminPanel(true);
+      } else {
+        setShowAdminLogin(true);
+      }
     }
   };
 
   useEffect(() => {
     document.body.style.overflow =
-      cartOpen || showAdminLogin || showAdminPanel || !!selectedProduct
+      cartOpen ||
+      showAdminLogin ||
+      showAdminPanel ||
+      !!selectedProduct ||
+      showGoogleLogin ||
+      showTrackOrder
         ? "hidden"
         : "";
     return () => {
       document.body.style.overflow = "";
     };
-  }, [cartOpen, showAdminLogin, showAdminPanel, selectedProduct]);
+  }, [
+    cartOpen,
+    showAdminLogin,
+    showAdminPanel,
+    selectedProduct,
+    showGoogleLogin,
+    showTrackOrder,
+  ]);
 
   const navLinks = [
     { label: "Home", id: "home" },
@@ -3131,7 +3738,7 @@ export default function App() {
               </span>
             </button>
 
-            <nav className="hidden md:flex items-center gap-10">
+            <nav className="hidden md:flex items-center gap-8">
               {navLinks.map((link) => (
                 <button
                   type="button"
@@ -3143,9 +3750,62 @@ export default function App() {
                   {link.label}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => setShowTrackOrder(true)}
+                className="font-display text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-brand-gold transition-colors flex items-center gap-1.5"
+              >
+                <Truck size={12} /> Track Order
+              </button>
             </nav>
 
             <div className="flex items-center gap-4">
+              {googleUser ? (
+                <div className="hidden md:flex items-center gap-2">
+                  <div
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold uppercase"
+                    style={{
+                      background: "oklch(0.85 0.12 85)",
+                      color: "oklch(0.09 0.008 60)",
+                    }}
+                    title={googleUser.email}
+                  >
+                    {googleUser.name.charAt(0)}
+                  </div>
+                  {googleUser.email === ADMIN_GMAIL && (
+                    <span
+                      className="text-xs font-bold px-1.5 py-0.5 rounded"
+                      style={{
+                        background: "oklch(0.85 0.12 85 / 0.15)",
+                        color: "oklch(0.85 0.12 85)",
+                      }}
+                    >
+                      Admin
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      logActivity(googleUser.email, "Logout", "Logged out");
+                      localStorage.removeItem(LS_GOOGLE_USER_KEY);
+                      setGoogleUser(null);
+                      toast.success("Logged out");
+                    }}
+                    className="p-1 text-muted-foreground hover:text-brand-gold transition-colors"
+                    title="Logout"
+                  >
+                    <LogOut size={14} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowGoogleLogin(true)}
+                  className="hidden md:flex items-center gap-1.5 px-3 py-1.5 font-display font-bold text-xs uppercase tracking-widest rounded-lg border border-border text-muted-foreground hover:border-brand-gold hover:text-brand-gold transition-colors"
+                >
+                  <LogIn size={12} /> Login
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setCartOpen(true)}
@@ -3368,6 +4028,10 @@ export default function App() {
               <p className="text-xs text-muted-foreground mt-1">
                 Built for Strength
               </p>
+              <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
+                <RotateCcw size={10} className="text-brand-gold" />
+                <span>7-Day Return Policy on all orders</span>
+              </div>
             </div>
             <div className="flex items-center gap-5">
               <a
@@ -3423,11 +4087,31 @@ export default function App() {
       {showAdminLogin && (
         <AdminLoginModal
           onSuccess={() => {
+            logActivity(
+              "admin",
+              "Admin Login",
+              "Admin accessed panel via password",
+            );
             setShowAdminLogin(false);
             setShowAdminPanel(true);
           }}
           onClose={() => setShowAdminLogin(false)}
         />
+      )}
+
+      {showGoogleLogin && (
+        <GoogleLoginModal
+          onSuccess={(user) => {
+            setGoogleUser(user);
+            setShowGoogleLogin(false);
+            toast.success(`Welcome, ${user.name}!`);
+          }}
+          onClose={() => setShowGoogleLogin(false)}
+        />
+      )}
+
+      {showTrackOrder && (
+        <TrackOrderModal onClose={() => setShowTrackOrder(false)} />
       )}
 
       {showAdminPanel && (
