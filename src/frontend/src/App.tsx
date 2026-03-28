@@ -1257,6 +1257,7 @@ interface RegisteredUser {
   name: string;
   phone?: string;
   passwordHash?: string;
+  registeredAt?: string;
 }
 
 function simpleHash(s: string): string {
@@ -1288,7 +1289,10 @@ function upsertUser(u: RegisteredUser) {
   if (idx >= 0) {
     users[idx] = { ...users[idx], ...u };
   } else {
-    users.push(u);
+    users.push({
+      ...u,
+      registeredAt: u.registeredAt || new Date().toISOString(),
+    });
   }
   saveUsers(users);
 }
@@ -1452,8 +1456,13 @@ function GoogleLoginModal({
       finishLogin(gu);
     } else {
       const found = users.find((u) => u.email === pwEmail.trim().toLowerCase());
-      if (!found || found.passwordHash !== simpleHash(pwPass)) {
-        setPwErr("Incorrect email or password");
+      if (!found) {
+        setPwErr("No account found. Please sign up first.");
+        setPwMode("register");
+        return;
+      }
+      if (found.passwordHash !== simpleHash(pwPass)) {
+        setPwErr("Incorrect password");
         return;
       }
       const gu: GoogleUser = { email: found.email, name: found.name };
@@ -2353,6 +2362,7 @@ function AdminPanel({
     | "appearance"
     | "orders"
     | "activity"
+    | "users"
   >("products");
 
   const refreshOrders = () => setOrders(loadOrders());
@@ -2652,6 +2662,7 @@ function AdminPanel({
               { key: "sections", label: "Sections", icon: "📂" },
               { key: "orders", label: "Orders", icon: "🧾" },
               { key: "activity", label: "Activity Log", icon: "📋" },
+              { key: "users", label: "Registered Users", icon: "👥" },
               { key: "sale", label: "Sale", icon: "🔥" },
               { key: "payments", label: "Payments", icon: "💳" },
               { key: "promos", label: "Promos", icon: "🎟️" },
@@ -3994,7 +4005,87 @@ function AdminPanel({
             <ActivityLogPanel />
           </section>
         )}
+        {activeTab === "users" && (
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <span style={{ fontSize: 18 }}>👥</span>
+              <h2 className="font-display text-xl font-bold text-foreground">
+                Registered Users
+              </h2>
+            </div>
+            <RegisteredUsersPanel />
+          </section>
+        )}
       </div>
+    </div>
+  );
+}
+
+function RegisteredUsersPanel() {
+  const [users, setUsers] = useState<RegisteredUser[]>(() => loadUsers());
+  useEffect(() => {
+    const interval = setInterval(() => setUsers(loadUsers()), 3000);
+    return () => clearInterval(interval);
+  }, []);
+  if (users.length === 0) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground font-display text-sm">
+        No users have signed up yet. They will appear here after registration.
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2 max-h-[60vh] overflow-y-auto pr-1">
+      <p className="text-xs text-muted-foreground font-display uppercase tracking-widest mb-2">
+        {users.length} registered user{users.length !== 1 ? "s" : ""}
+      </p>
+      {users.map((u, i) => (
+        <div
+          key={u.email}
+          className="bg-card border border-border rounded-lg p-3 flex items-start gap-3"
+        >
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 font-display font-bold text-sm"
+            style={{
+              background: "oklch(0.85 0.12 85 / 0.15)",
+              color: "oklch(0.85 0.12 85)",
+            }}
+          >
+            {u.name ? u.name[0].toUpperCase() : "?"}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-display font-bold text-sm text-foreground">
+                {u.name || "Unknown"}
+              </span>
+              {u.email.endsWith("@phone.local") && (
+                <span
+                  className="text-xs px-2 py-0.5 rounded"
+                  style={{
+                    background: "oklch(0.15 0.01 60)",
+                    color: "oklch(0.75 0.12 300)",
+                  }}
+                >
+                  Phone
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {u.email.endsWith("@phone.local")
+                ? `📱 ${u.phone || "Phone user"}`
+                : u.email}
+            </p>
+            {u.registeredAt && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Joined: {new Date(u.registeredAt).toLocaleString()}
+              </p>
+            )}
+          </div>
+          <div className="text-xs text-muted-foreground font-mono">
+            #{i + 1}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -4606,6 +4697,8 @@ export default function App() {
   const [showTrackOrder, setShowTrackOrder] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [priceMin, setPriceMin] = useState("");
+  const [priceMax, setPriceMax] = useState("");
 
   const handleDirectBuy = useCallback((item: CheckoutItem) => {
     setCheckoutItem(item);
@@ -4859,6 +4952,8 @@ export default function App() {
                 onClick={() => {
                   setShowSearch(true);
                   setSearchQuery("");
+                  setPriceMin("");
+                  setPriceMax("");
                 }}
                 className="p-2 text-foreground hover:text-brand-gold transition-colors"
                 title="Search products"
@@ -5329,9 +5424,50 @@ export default function App() {
             </div>
             <div
               style={{ height: "1px", background: "oklch(0.85 0.12 85 / 0.3)" }}
-              className="mb-6"
+              className="mb-4"
             />
-            {searchQuery.trim().length === 0 ? (
+            {/* Price range filter */}
+            <div className="flex items-center gap-2 mb-5">
+              <span className="text-xs uppercase tracking-widest font-display text-muted-foreground flex-shrink-0">
+                Price ₹
+              </span>
+              <input
+                type="number"
+                placeholder="Min"
+                value={priceMin}
+                onChange={(e) => setPriceMin(e.target.value)}
+                className="w-24 rounded-lg px-3 py-1.5 text-sm outline-none text-foreground"
+                style={{
+                  background: "oklch(0.12 0.01 60)",
+                  border: "1px solid oklch(0.25 0.03 70)",
+                }}
+              />
+              <span className="text-muted-foreground text-xs">—</span>
+              <input
+                type="number"
+                placeholder="Max"
+                value={priceMax}
+                onChange={(e) => setPriceMax(e.target.value)}
+                className="w-24 rounded-lg px-3 py-1.5 text-sm outline-none text-foreground"
+                style={{
+                  background: "oklch(0.12 0.01 60)",
+                  border: "1px solid oklch(0.25 0.03 70)",
+                }}
+              />
+              {(priceMin || priceMax) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPriceMin("");
+                    setPriceMax("");
+                  }}
+                  className="text-xs text-muted-foreground hover:text-brand-gold transition-colors ml-1"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {searchQuery.trim().length === 0 && !priceMin && !priceMax ? (
               <div className="text-center text-muted-foreground font-display text-xs uppercase tracking-widest mt-12">
                 Start typing to search the collection
               </div>
