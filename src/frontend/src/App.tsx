@@ -52,6 +52,7 @@ const LS_SECTIONS_KEY = "rocher_custom_sections";
 const LS_ORDERS_KEY = "rocher_orders";
 const LS_ACTIVITY_KEY = "rocher_activity_log";
 const LS_GOOGLE_USER_KEY = "rocher_google_user";
+const LS_FOUNDER_KEY = "rocher_founder_data";
 const ADMIN_GMAIL = "tchhillar493@gmail.com";
 
 const SIZE_GUIDE = [
@@ -409,6 +410,37 @@ function loadInstagramId(): string {
   } catch {
     return "official_rocher";
   }
+}
+
+interface FounderData {
+  photo: string;
+  note: string;
+  name: string;
+  title: string;
+}
+
+const DEFAULT_FOUNDER: FounderData = {
+  photo: "",
+  note: "ROCHER was not created to follow trends.\n\nIt was built to represent strength, presence, and individuality.\n\nEvery piece is designed with intention — minimal, bold, and timeless.\nNot for everyone. Only for those who stand firm in who they are.\n\nThis is just the beginning.",
+  name: "Tanish",
+  title: "Founder, ROCHER",
+};
+
+function loadFounderData(): FounderData {
+  try {
+    const raw = localStorage.getItem(LS_FOUNDER_KEY);
+    if (!raw) return DEFAULT_FOUNDER;
+    const parsed = JSON.parse(raw);
+    return { ...DEFAULT_FOUNDER, ...parsed };
+  } catch {
+    return DEFAULT_FOUNDER;
+  }
+}
+
+function saveFounderData(data: FounderData) {
+  try {
+    localStorage.setItem(LS_FOUNDER_KEY, JSON.stringify(data));
+  } catch {}
 }
 
 function salePrice(price: number, discount: number): number {
@@ -2308,6 +2340,7 @@ function AdminPanel({
   customBg: initialBg,
   instagramId: initialInstaId,
   customSections: initialSections,
+  founderData: initialFounder,
   actor,
   onClose,
 }: {
@@ -2319,6 +2352,7 @@ function AdminPanel({
   customBg: string;
   instagramId: string;
   customSections: ProductSection[];
+  founderData: FounderData;
   actor: backendInterface | null;
   onClose: (
     updated?: Product[],
@@ -2329,6 +2363,7 @@ function AdminPanel({
     newBg?: string,
     newInstaId?: string,
     newSections?: ProductSection[],
+    newFounder?: FounderData,
   ) => void;
 }) {
   const [editData, setEditData] = useState<AdminProduct[]>(
@@ -2358,6 +2393,14 @@ function AdminPanel({
   const [newSectionTitle, setNewSectionTitle] = useState("");
   const [newSectionSubtitle, setNewSectionSubtitle] = useState("");
   const [bgColor, setBgColor] = useState<string>(initialBg || "#0c0b09");
+  const [founderNote, setFounderNote] = useState<string>(initialFounder.note);
+  const [founderName, setFounderName] = useState<string>(initialFounder.name);
+  const [founderTitle, setFounderTitle] = useState<string>(
+    initialFounder.title,
+  );
+  const [founderPhoto, setFounderPhoto] = useState<string>(
+    initialFounder.photo,
+  );
   const [promoAddOpen, setPromoAddOpen] = useState(false);
   const [paymentAddOpen, setPaymentAddOpen] = useState(false);
   const [newPromoCode, setNewPromoCode] = useState("");
@@ -2518,6 +2561,12 @@ function AdminPanel({
         bgColor: bgColor !== "#0c0b09" ? bgColor : "",
         instagramId: instaId.trim().replace(/^@/, "") || "official_rocher",
         customSections: sections,
+        founderData: {
+          photo: founderPhoto,
+          note: founderNote,
+          name: founderName,
+          title: founderTitle,
+        },
       };
       actor
         .setValue("siteData", JSON.stringify(canisterData), ADMIN_PASSWORD)
@@ -2537,6 +2586,14 @@ function AdminPanel({
       toast.success("Changes saved successfully");
     }
 
+    const newFounder: FounderData = {
+      photo: founderPhoto,
+      note: founderNote,
+      name: founderName,
+      title: founderTitle,
+    };
+    saveFounderData(newFounder);
+
     onClose(
       allProducts,
       sale,
@@ -2546,6 +2603,7 @@ function AdminPanel({
       bgColor !== "#0c0b09" ? bgColor : "",
       instaId.trim().replace(/^@/, "") || "official_rocher",
       sections,
+      newFounder,
     );
   };
 
@@ -2904,6 +2962,130 @@ function AdminPanel({
                 This updates all Instagram links and Order via Instagram buttons
                 sitewide.
               </p>
+            </div>
+
+            {/* Founder's Note */}
+            <div className="bg-card border border-border rounded-xl p-6 shadow-card space-y-5 mt-6">
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                Founder&#39;s Note
+              </p>
+
+              {/* Founder Photo */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Founder Photo (optional)
+                </p>
+                <div className="flex items-start gap-4">
+                  {founderPhoto ? (
+                    <img
+                      src={founderPhoto}
+                      alt="Founder"
+                      className="w-20 h-20 rounded-full object-cover border-2 flex-shrink-0"
+                      style={{ borderColor: "oklch(0.85 0.12 85 / 0.4)" }}
+                    />
+                  ) : (
+                    <div
+                      className="w-20 h-20 rounded-full flex-shrink-0 flex items-center justify-center border-2 border-dashed"
+                      style={{
+                        borderColor: "oklch(0.85 0.12 85 / 0.3)",
+                        color: "oklch(0.5 0.02 60)",
+                      }}
+                    >
+                      <span className="text-xs text-center leading-tight px-1">
+                        No photo
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-2">
+                    <label className="flex items-center gap-2 px-4 py-2.5 btn-outline-gold font-display font-bold text-xs rounded-lg cursor-pointer w-fit">
+                      <Image size={14} /> Upload Photo
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const canvas = document.createElement("canvas");
+                          const img = new window.Image();
+                          img.onload = () => {
+                            const MAX = 400;
+                            let w = img.width;
+                            let h = img.height;
+                            if (w > MAX || h > MAX) {
+                              if (w > h) {
+                                h = Math.round((h * MAX) / w);
+                                w = MAX;
+                              } else {
+                                w = Math.round((w * MAX) / h);
+                                h = MAX;
+                              }
+                            }
+                            canvas.width = w;
+                            canvas.height = h;
+                            canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+                            setFounderPhoto(
+                              canvas.toDataURL("image/jpeg", 0.7),
+                            );
+                          };
+                          img.src = URL.createObjectURL(file);
+                        }}
+                      />
+                    </label>
+                    {founderPhoto && (
+                      <button
+                        type="button"
+                        onClick={() => setFounderPhoto("")}
+                        className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-destructive transition-colors w-fit"
+                      >
+                        <X size={12} /> Remove Photo
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Note Text */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Note Text (use blank lines to separate paragraphs)
+                </p>
+                <textarea
+                  rows={6}
+                  value={founderNote}
+                  onChange={(e) => setFounderNote(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors resize-none"
+                  placeholder="Write the founder's note here..."
+                />
+              </div>
+
+              {/* Founder Name & Title */}
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1.5">
+                    Founder Name
+                  </p>
+                  <input
+                    type="text"
+                    value={founderName}
+                    onChange={(e) => setFounderName(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                    placeholder="Tanish"
+                  />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1.5">
+                    Title / Role
+                  </p>
+                  <input
+                    type="text"
+                    value={founderTitle}
+                    onChange={(e) => setFounderTitle(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                    placeholder="Founder, ROCHER"
+                  />
+                </div>
+              </div>
             </div>
           </section>
         )}
@@ -4750,6 +4932,9 @@ export default function App() {
   const [customSections, setCustomSections] = useState<ProductSection[]>(() =>
     loadSections(),
   );
+  const [founderData, setFounderData] = useState<FounderData>(() =>
+    loadFounderData(),
+  );
   const [activeSection, setActiveSection] = useState<string>("__all__");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
@@ -4839,6 +5024,11 @@ export default function App() {
               setInstagramId((data as any).instagramId);
             if (Array.isArray((data as any).customSections))
               setCustomSections((data as any).customSections);
+            if ((data as any).founderData) {
+              const fd = { ...DEFAULT_FOUNDER, ...(data as any).founderData };
+              setFounderData(fd);
+              saveFounderData(fd);
+            }
           } catch {}
         }
         if (ordersStr) {
@@ -5370,8 +5560,18 @@ export default function App() {
       >
         <div className="max-w-2xl mx-auto text-center">
           <p className="font-display text-xs uppercase tracking-[0.3em] text-brand-gold mb-8">
-            Founder's Note
+            Founder&#39;s Note
           </p>
+          {founderData.photo && (
+            <div className="flex justify-center mb-8">
+              <img
+                src={founderData.photo}
+                alt={founderData.name}
+                className="w-24 h-24 rounded-full object-cover border-2"
+                style={{ borderColor: "oklch(0.85 0.12 85 / 0.4)" }}
+              />
+            </div>
+          )}
           <div
             className="space-y-4 text-sm leading-relaxed"
             style={{
@@ -5379,28 +5579,17 @@ export default function App() {
               fontFamily: "'Playfair Display', serif",
             }}
           >
-            <p>ROCHER was not created to follow trends.</p>
-            <p>
-              It was built to represent strength, presence, and individuality.
-            </p>
-            <p>
-              Every piece is designed with intention — minimal, bold, and
-              timeless.
-            </p>
-            <p>
-              Not for everyone. Only for those who stand firm in who they are.
-            </p>
-            <p className="pt-2">This is just the beginning.</p>
+            <p style={{ whiteSpace: "pre-line" }}>{founderData.note}</p>
           </div>
           <div className="mt-10 border-t border-brand-gold/20 pt-8">
             <p className="font-display text-sm tracking-[0.15em] text-foreground">
-              — Tanish
+              — {founderData.name}
             </p>
             <p
               className="text-xs tracking-[0.2em] uppercase mt-1"
               style={{ color: "oklch(0.6 0.02 60)" }}
             >
-              Founder, ROCHER
+              {founderData.title}
             </p>
           </div>
         </div>
@@ -5909,6 +6098,7 @@ export default function App() {
           customBg={customBg}
           instagramId={instagramId}
           customSections={customSections}
+          founderData={founderData}
           actor={actor}
           onClose={(
             updated,
@@ -5919,6 +6109,7 @@ export default function App() {
             newBg,
             newInstaId,
             newSections,
+            newFounder,
           ) => {
             if (updated) setProducts(updated);
             if (newSale) setSale(newSale);
@@ -5928,6 +6119,10 @@ export default function App() {
             if (newBg !== undefined) setCustomBg(newBg);
             if (newInstaId !== undefined) setInstagramId(newInstaId);
             if (newSections !== undefined) setCustomSections(newSections);
+            if (newFounder !== undefined) {
+              setFounderData(newFounder);
+              saveFounderData(newFounder);
+            }
             setShowAdminPanel(false);
           }}
         />
