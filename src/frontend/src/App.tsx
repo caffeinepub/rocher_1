@@ -129,6 +129,7 @@ interface Order {
   address: string;
   locationCoords?: string;
   viaInstagram: boolean;
+  userEmail?: string;
 }
 
 interface ActivityLog {
@@ -773,6 +774,7 @@ function CheckoutModal({
   paymentMethods,
   onOrderPlaced,
   instagramId,
+  userEmail,
 }: {
   item: CheckoutItem | null;
   onClose: () => void;
@@ -780,6 +782,7 @@ function CheckoutModal({
   paymentMethods: PaymentMethod[];
   onOrderPlaced?: (order: Order) => void;
   instagramId?: string;
+  userEmail?: string;
 }) {
   const [form, setForm] = useState({
     name: "",
@@ -854,6 +857,7 @@ function CheckoutModal({
       address: `${form.address1}${form.address2 ? `, ${form.address2}` : ""}, ${form.city}, ${form.state} - ${form.pincode}`,
       locationCoords: locationCoords || undefined,
       viaInstagram,
+      userEmail: userEmail || undefined,
     };
   };
 
@@ -1258,6 +1262,7 @@ interface RegisteredUser {
   phone?: string;
   passwordHash?: string;
   registeredAt?: string;
+  blocked?: boolean;
 }
 
 function simpleHash(s: string): string {
@@ -1337,6 +1342,18 @@ function GoogleLoginModal({
   }, [onClose]);
 
   const finishLogin = (user: GoogleUser) => {
+    const allUsers = loadUsers();
+    const matched = allUsers.find(
+      (u) =>
+        u.email === user.email ||
+        (u.phone &&
+          user.email.startsWith("ph_") &&
+          user.email.includes(u.phone)),
+    );
+    if (matched?.blocked) {
+      toast.error("Your account has been blocked. Contact support.");
+      return;
+    }
     if (rememberMe)
       localStorage.setItem(LS_GOOGLE_USER_KEY, JSON.stringify(user));
     onSuccess(user);
@@ -4027,6 +4044,35 @@ function RegisteredUsersPanel() {
     const interval = setInterval(() => setUsers(loadUsers()), 3000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleDelete = (email: string) => {
+    if (!confirm("Delete this user permanently? This cannot be undone."))
+      return;
+    const updated = loadUsers().filter((u) => u.email !== email);
+    saveUsers(updated);
+    setUsers(updated);
+    logActivity("admin", "User Deleted", `Deleted account: ${email}`);
+    toast.success("User deleted");
+  };
+
+  const handleToggleBlock = (email: string) => {
+    const all = loadUsers();
+    const u = all.find((x) => x.email === email);
+    if (!u) return;
+    const nowBlocked = !u.blocked;
+    const updated = all.map((x) =>
+      x.email === email ? { ...x, blocked: nowBlocked } : x,
+    );
+    saveUsers(updated);
+    setUsers(updated);
+    logActivity(
+      "admin",
+      nowBlocked ? "User Blocked" : "User Unblocked",
+      `${email} ${nowBlocked ? "blocked" : "unblocked"} by admin`,
+    );
+    toast.success(nowBlocked ? "User blocked" : "User unblocked");
+  };
+
   if (users.length === 0) {
     return (
       <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground font-display text-sm">
@@ -4042,13 +4088,15 @@ function RegisteredUsersPanel() {
       {users.map((u, i) => (
         <div
           key={u.email}
-          className="bg-card border border-border rounded-lg p-3 flex items-start gap-3"
+          className={`bg-card border rounded-lg p-3 flex items-start gap-3 ${u.blocked ? "border-red-500/40 opacity-60" : "border-border"}`}
         >
           <div
             className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 font-display font-bold text-sm"
             style={{
-              background: "oklch(0.85 0.12 85 / 0.15)",
-              color: "oklch(0.85 0.12 85)",
+              background: u.blocked
+                ? "oklch(0.3 0.08 25 / 0.3)"
+                : "oklch(0.85 0.12 85 / 0.15)",
+              color: u.blocked ? "oklch(0.7 0.15 25)" : "oklch(0.85 0.12 85)",
             }}
           >
             {u.name ? u.name[0].toUpperCase() : "?"}
@@ -4058,6 +4106,11 @@ function RegisteredUsersPanel() {
               <span className="font-display font-bold text-sm text-foreground">
                 {u.name || "Unknown"}
               </span>
+              {u.blocked && (
+                <span className="text-xs px-2 py-0.5 rounded bg-red-900/40 text-red-400 font-bold">
+                  Blocked
+                </span>
+              )}
               {u.email.endsWith("@phone.local") && (
                 <span
                   className="text-xs px-2 py-0.5 rounded"
@@ -4081,8 +4134,24 @@ function RegisteredUsersPanel() {
               </p>
             )}
           </div>
-          <div className="text-xs text-muted-foreground font-mono">
-            #{i + 1}
+          <div className="flex flex-col items-end gap-1.5">
+            <span className="text-xs text-muted-foreground font-mono">
+              #{i + 1}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleToggleBlock(u.email)}
+              className={`text-[10px] font-display font-bold px-2 py-0.5 rounded border transition-colors ${u.blocked ? "border-green-500/40 text-green-400 hover:bg-green-900/20" : "border-yellow-500/40 text-yellow-400 hover:bg-yellow-900/20"}`}
+            >
+              {u.blocked ? "Unblock" : "Block"}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDelete(u.email)}
+              className="text-[10px] font-display font-bold px-2 py-0.5 rounded border border-red-500/40 text-red-400 hover:bg-red-900/20 transition-colors"
+            >
+              Delete
+            </button>
           </div>
         </div>
       ))}
@@ -4687,6 +4756,7 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [logoClickCount, setLogoClickCount] = useState(0);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [showMyOrders, setShowMyOrders] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [checkoutItem, setCheckoutItem] = useState<CheckoutItem | null>(null);
@@ -4926,6 +4996,14 @@ export default function App() {
                   )}
                   <button
                     type="button"
+                    onClick={() => setShowMyOrders(true)}
+                    className="p-1 text-muted-foreground hover:text-brand-gold transition-colors text-xs font-display uppercase tracking-widest"
+                    title="My Orders"
+                  >
+                    My Orders
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => {
                       logActivity(googleUser.email, "Logout", "Logged out");
                       localStorage.removeItem(LS_GOOGLE_USER_KEY);
@@ -5037,6 +5115,18 @@ export default function App() {
                   {googleUser.name}{" "}
                   {googleUser.email === ADMIN_GMAIL ? "· Admin" : ""}
                 </div>
+              )}
+              {googleUser && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMyOrders(true);
+                    setMobileMenuOpen(false);
+                  }}
+                  className="flex items-center gap-1.5 w-full text-left py-2 font-display text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-brand-gold transition-colors"
+                >
+                  <Package size={12} /> My Orders
+                </button>
               )}
             </div>
           )}
@@ -5378,6 +5468,186 @@ export default function App() {
         />
       )}
 
+      {/* My Orders Modal */}
+      {showMyOrders && googleUser && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/85 backdrop-blur-md"
+            onClick={() => setShowMyOrders(false)}
+            role="button"
+            tabIndex={-1}
+            aria-label="Close"
+            onKeyDown={(e) => e.key === "Enter" && setShowMyOrders(false)}
+          />
+          <div className="relative z-10 bg-card rounded-xl w-full max-w-2xl max-h-[88vh] overflow-y-auto shadow-2xl border border-brand-gold/30 animate-fade-in-up">
+            <button
+              type="button"
+              onClick={() => setShowMyOrders(false)}
+              className="absolute top-4 right-4 z-20 w-9 h-9 rounded-full bg-background/80 flex items-center justify-center text-foreground hover:text-brand-gold transition-colors"
+            >
+              <X size={18} />
+            </button>
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-1">
+                <Package size={20} style={{ color: "oklch(0.85 0.12 85)" }} />
+                <h2 className="font-display text-2xl font-bold text-brand-gold tracking-wide">
+                  My Orders
+                </h2>
+              </div>
+              <p className="text-xs text-muted-foreground font-display mb-4">
+                {googleUser.name} · {googleUser.email}
+              </p>
+              <div className="gold-divider mb-5" />
+              {(() => {
+                const myOrders = loadOrders().filter(
+                  (o) => o.userEmail === googleUser.email,
+                );
+                if (myOrders.length === 0) {
+                  return (
+                    <div className="text-center py-12 text-muted-foreground font-display">
+                      <Package size={32} className="mx-auto mb-3 opacity-30" />
+                      <p>No orders yet.</p>
+                      <p className="text-xs mt-1">
+                        Your orders will appear here after you place one.
+                      </p>
+                    </div>
+                  );
+                }
+                const steps: Order["trackingStatus"][] = [
+                  "placed",
+                  "packed",
+                  "shipped",
+                  "out_for_delivery",
+                  "delivered",
+                ];
+                const stepLabel: Record<string, string> = {
+                  placed: "Placed",
+                  packed: "Packed",
+                  shipped: "Shipped",
+                  out_for_delivery: "Out for Delivery",
+                  delivered: "Delivered",
+                };
+                return (
+                  <div className="flex flex-col gap-6">
+                    {myOrders.map((order) => {
+                      const currentStep = steps.indexOf(
+                        order.trackingStatus || "placed",
+                      );
+                      return (
+                        <div
+                          key={order.id}
+                          className="rounded-xl border border-border bg-background/60 p-5"
+                        >
+                          {/* Header */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                            <div>
+                              <span className="font-display font-bold text-foreground text-base">
+                                {order.product}
+                              </span>
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                · {order.size} · Qty {order.qty}
+                              </span>
+                            </div>
+                            <span
+                              className={`text-xs font-bold px-2 py-0.5 rounded uppercase tracking-widest ${order.status === "placed" ? "bg-green-900/40 text-green-400" : "bg-red-900/40 text-red-400"}`}
+                            >
+                              {order.status === "placed"
+                                ? "Active"
+                                : "Cancelled"}
+                            </span>
+                          </div>
+                          {/* Price & Payment */}
+                          <div className="flex flex-wrap gap-4 text-xs text-muted-foreground font-display mb-3">
+                            <span
+                              style={{ color: "oklch(0.85 0.12 85)" }}
+                              className="font-bold text-sm"
+                            >
+                              ₹{order.price}
+                            </span>
+                            <span>Payment: {order.paymentMethod}</span>
+                            {order.promoCode && (
+                              <span className="text-green-400">
+                                {order.promoCode}
+                              </span>
+                            )}
+                            <span>
+                              {new Date(order.createdAt).toLocaleDateString(
+                                "en-IN",
+                                {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                },
+                              )}
+                            </span>
+                          </div>
+                          {/* Address */}
+                          <div className="text-xs text-muted-foreground font-display mb-4">
+                            <span className="text-foreground font-semibold">
+                              {order.name}
+                            </span>{" "}
+                            · {order.phone}
+                            <br />
+                            {order.address}
+                          </div>
+                          {/* Tracking stepper */}
+                          {order.status === "placed" && (
+                            <div className="mt-2">
+                              <div className="flex items-center gap-0">
+                                {steps.map((step, i) => (
+                                  <div
+                                    key={step}
+                                    className="flex items-center flex-1"
+                                  >
+                                    <div className="flex flex-col items-center flex-1">
+                                      <div
+                                        className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold border-2 transition-all ${i <= currentStep ? "border-brand-gold" : "border-border"}`}
+                                        style={
+                                          i <= currentStep
+                                            ? {
+                                                background:
+                                                  "oklch(0.85 0.12 85)",
+                                                color: "oklch(0.09 0.008 60)",
+                                              }
+                                            : {
+                                                background: "transparent",
+                                                color: "oklch(0.5 0.02 60)",
+                                              }
+                                        }
+                                      >
+                                        {i <= currentStep ? "✓" : i + 1}
+                                      </div>
+                                      <span
+                                        className={`text-[9px] mt-1 font-display text-center leading-tight ${i <= currentStep ? "text-brand-gold" : "text-muted-foreground"}`}
+                                      >
+                                        {stepLabel[step]}
+                                      </span>
+                                    </div>
+                                    {i < steps.length - 1 && (
+                                      <div
+                                        className={`h-0.5 flex-1 -mt-4 mx-0.5 transition-all ${i < currentStep ? "bg-brand-gold" : "bg-border"}`}
+                                      />
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {/* Order ID */}
+                          <p className="text-[10px] text-muted-foreground font-display mt-3">
+                            Order ID: #{order.id.slice(-8).toUpperCase()}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
       {checkoutItem && (
         <CheckoutModal
           item={checkoutItem}
@@ -5385,6 +5655,7 @@ export default function App() {
           promoCodes={promoCodes}
           paymentMethods={paymentMethods}
           instagramId={instagramId}
+          userEmail={googleUser?.email}
         />
       )}
 
