@@ -7,16 +7,8 @@ export interface None {
     __kind__: "None";
 }
 export type Option<T> = Some<T> | None;
-export interface ProductInput {
-    id: bigint;
-    name: string;
-    price: bigint;
-}
-export interface Product {
-    name: string;
-    price: bigint;
-}
 export interface backendInterface {
-    getAllProducts(): Promise<Array<Product>>;
-    initialize(productInputs: Array<ProductInput>): Promise<void>;
+    appendToValue(key: string, newEntry: string): Promise<boolean>;
+    getValue(key: string): Promise<string>;
+    setValue(key: string, value: string, password: string): Promise<boolean>;
 }

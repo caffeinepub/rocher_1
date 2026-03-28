@@ -1,41 +1,43 @@
-import Text "mo:core/Text";
-import Nat "mo:core/Nat";
-import Order "mo:core/Order";
 import Map "mo:core/Map";
+import Text "mo:core/Text";
+
+
 
 actor {
-  type Product = {
-    name : Text;
-    price : Nat;
-  };
+  let store = Map.empty<Text, Text>();
+  let adminPassword = "rocher2024";
 
-  module Product {
-    public func compare(product1 : Product, product2 : Product) : Order.Order {
-      Text.compare(product1.name, product2.name);
+  public query ({ caller }) func getValue(key : Text) : async Text {
+    switch (store.get(key)) {
+      case (?value) { value };
+      case (null) { "" };
     };
   };
 
-  let products = Map.empty<Nat, Product>();
-
-  public type ProductInput = {
-    id : Nat;
-    name : Text;
-    price : Nat;
-  };
-
-  public shared ({ caller }) func initialize(productInputs : [ProductInput]) : async () {
-    if (products.isEmpty()) {
-      for (input in productInputs.values()) {
-        let product : Product = {
-          name = input.name;
-          price = input.price;
-        };
-        products.add(input.id, product);
-      };
+  public shared ({ caller }) func setValue(key : Text, value : Text, password : Text) : async Bool {
+    if (Text.equal(password, adminPassword)) {
+      store.add(key, value);
+      true;
+    } else {
+      false;
     };
   };
 
-  public query ({ caller }) func getAllProducts() : async [Product] {
-    products.values().toArray().sort();
+  public shared ({ caller }) func appendToValue(key : Text, newEntry : Text) : async Bool {
+    let existing = switch (store.get(key)) {
+      case (?value) { value };
+      case (null) { "" };
+    };
+
+    let updated = if (existing.size() == 0 or existing == "[]") {
+      "[ " # newEntry # " ]";
+    } else {
+      let trimmed = existing.trimEnd(#char ']');
+      trimmed # ", " # newEntry # " ]";
+    };
+
+    store.add(key, updated);
+    true;
   };
 };
+

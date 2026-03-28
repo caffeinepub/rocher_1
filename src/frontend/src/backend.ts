@@ -89,46 +89,52 @@ export class ExternalBlob {
         return this;
     }
 }
-export interface ProductInput {
-    id: bigint;
-    name: string;
-    price: bigint;
-}
-export interface Product {
-    name: string;
-    price: bigint;
-}
 export interface backendInterface {
-    getAllProducts(): Promise<Array<Product>>;
-    initialize(productInputs: Array<ProductInput>): Promise<void>;
+    appendToValue(key: string, newEntry: string): Promise<boolean>;
+    getValue(key: string): Promise<string>;
+    setValue(key: string, value: string, password: string): Promise<boolean>;
 }
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
-    async getAllProducts(): Promise<Array<Product>> {
+    async appendToValue(arg0: string, arg1: string): Promise<boolean> {
         if (this.processError) {
             try {
-                const result = await this.actor.getAllProducts();
+                const result = await this.actor.appendToValue(arg0, arg1);
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.getAllProducts();
+            const result = await this.actor.appendToValue(arg0, arg1);
             return result;
         }
     }
-    async initialize(arg0: Array<ProductInput>): Promise<void> {
+    async getValue(arg0: string): Promise<string> {
         if (this.processError) {
             try {
-                const result = await this.actor.initialize(arg0);
+                const result = await this.actor.getValue(arg0);
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.initialize(arg0);
+            const result = await this.actor.getValue(arg0);
+            return result;
+        }
+    }
+    async setValue(arg0: string, arg1: string, arg2: string): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.setValue(arg0, arg1, arg2);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.setValue(arg0, arg1, arg2);
             return result;
         }
     }

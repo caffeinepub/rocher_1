@@ -8,31 +8,19 @@
 
 import { IDL } from '@icp-sdk/core/candid';
 
-export const Product = IDL.Record({ 'name' : IDL.Text, 'price' : IDL.Nat });
-export const ProductInput = IDL.Record({
-  'id' : IDL.Nat,
-  'name' : IDL.Text,
-  'price' : IDL.Nat,
-});
-
 export const idlService = IDL.Service({
-  'getAllProducts' : IDL.Func([], [IDL.Vec(Product)], ['query']),
-  'initialize' : IDL.Func([IDL.Vec(ProductInput)], [], []),
+  'appendToValue' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
+  'getValue' : IDL.Func([IDL.Text], [IDL.Text], ['query']),
+  'setValue' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [IDL.Bool], []),
 });
 
 export const idlInitArgs = [];
 
 export const idlFactory = ({ IDL }) => {
-  const Product = IDL.Record({ 'name' : IDL.Text, 'price' : IDL.Nat });
-  const ProductInput = IDL.Record({
-    'id' : IDL.Nat,
-    'name' : IDL.Text,
-    'price' : IDL.Nat,
-  });
-  
   return IDL.Service({
-    'getAllProducts' : IDL.Func([], [IDL.Vec(Product)], ['query']),
-    'initialize' : IDL.Func([IDL.Vec(ProductInput)], [], []),
+    'appendToValue' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
+    'getValue' : IDL.Func([IDL.Text], [IDL.Text], ['query']),
+    'setValue' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [IDL.Bool], []),
   });
 };
 

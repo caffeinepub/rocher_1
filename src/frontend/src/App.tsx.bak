@@ -19,7 +19,6 @@ import {
   Plus,
   RotateCcw,
   Save,
-  Search,
   ShieldCheck,
   ShoppingCart,
   Tag,
@@ -791,10 +790,6 @@ function CheckoutModal({
     pincode: "",
   });
   const [locationCoords, setLocationCoords] = useState<string>("");
-  const [locationLatLng, setLocationLatLng] = useState<{
-    lat: number;
-    lng: number;
-  } | null>(null);
   const [locationStatus, setLocationStatus] = useState<
     "idle" | "loading" | "success" | "error"
   >("idle");
@@ -970,7 +965,6 @@ function CheckoutModal({
                     const { latitude, longitude } = pos.coords;
                     const coords = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
                     setLocationCoords(coords);
-                    setLocationLatLng({ lat: latitude, lng: longitude });
                     try {
                       const res = await fetch(
                         `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
@@ -1026,20 +1020,10 @@ function CheckoutModal({
                   : "Use My Location"}
             </button>
           </div>
-          {locationLatLng && (
-            <div className="mb-3 rounded-lg overflow-hidden border border-green-500/30">
-              <p className="text-xs text-green-400 px-2 py-1 flex items-center gap-1 bg-green-500/10">
-                <MapPin size={10} /> GPS: {locationCoords}
-              </p>
-              <iframe
-                title="Location Preview"
-                width="100%"
-                height="180"
-                style={{ border: 0, display: "block" }}
-                loading="lazy"
-                src={`https://www.openstreetmap.org/export/embed.html?bbox=${locationLatLng.lng - 0.005},${locationLatLng.lat - 0.005},${locationLatLng.lng + 0.005},${locationLatLng.lat + 0.005}&layer=mapnik&marker=${locationLatLng.lat},${locationLatLng.lng}`}
-              />
-            </div>
+          {locationCoords && (
+            <p className="text-xs text-green-400 mb-3 flex items-center gap-1">
+              <MapPin size={10} /> GPS: {locationCoords}
+            </p>
           )}
           <div className="flex flex-col gap-3 mb-5">
             <div className="grid grid-cols-2 gap-3">
@@ -4604,8 +4588,6 @@ export default function App() {
   );
   const [showGoogleLogin, setShowGoogleLogin] = useState(false);
   const [showTrackOrder, setShowTrackOrder] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
 
   const handleDirectBuy = useCallback((item: CheckoutItem) => {
     setCheckoutItem(item);
@@ -4728,8 +4710,7 @@ export default function App() {
       showAdminPanel ||
       !!selectedProduct ||
       showGoogleLogin ||
-      showTrackOrder ||
-      showSearch
+      showTrackOrder
         ? "hidden"
         : "";
     return () => {
@@ -4742,7 +4723,6 @@ export default function App() {
     selectedProduct,
     showGoogleLogin,
     showTrackOrder,
-    showSearch,
   ]);
 
   const navLinks = [
@@ -4856,17 +4836,6 @@ export default function App() {
               )}
               <button
                 type="button"
-                onClick={() => {
-                  setShowSearch(true);
-                  setSearchQuery("");
-                }}
-                className="p-2 text-foreground hover:text-brand-gold transition-colors"
-                title="Search products"
-              >
-                <Search size={20} />
-              </button>
-              <button
-                type="button"
                 onClick={() => setCartOpen(true)}
                 data-ocid="cart.open_modal_button"
                 className="relative p-2 text-foreground hover:text-brand-gold transition-colors"
@@ -4915,17 +4884,6 @@ export default function App() {
                 className="flex items-center gap-1.5 w-full text-left py-2 font-display text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-brand-gold transition-colors"
               >
                 <Truck size={12} /> Track Order
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSearch(true);
-                  setSearchQuery("");
-                  setMobileMenuOpen(false);
-                }}
-                className="flex items-center gap-1.5 w-full text-left py-2 font-display text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-brand-gold transition-colors"
-              >
-                <Search size={12} /> Search
               </button>
               <button
                 type="button"
@@ -5291,175 +5249,6 @@ export default function App() {
           paymentMethods={paymentMethods}
           instagramId={instagramId}
         />
-      )}
-
-      {showSearch && (
-        <div
-          className="fixed inset-0 z-[200] flex flex-col"
-          style={{
-            background: "oklch(0.06 0.008 60 / 0.97)",
-            backdropFilter: "blur(16px)",
-          }}
-          role="presentation"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowSearch(false);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setShowSearch(false);
-          }}
-        >
-          <div className="w-full max-w-2xl mx-auto px-4 pt-16 pb-8">
-            <div className="flex items-center gap-3 mb-2">
-              <Search size={22} style={{ color: "oklch(0.85 0.12 85)" }} />
-              <input
-                type="text"
-                placeholder="Search products, styles, descriptions..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 bg-transparent font-display text-xl text-foreground outline-none placeholder:text-muted-foreground"
-                style={{ caretColor: "oklch(0.85 0.12 85)" }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowSearch(false)}
-                className="p-1 text-muted-foreground hover:text-brand-gold transition-colors"
-              >
-                <X size={22} />
-              </button>
-            </div>
-            <div
-              style={{ height: "1px", background: "oklch(0.85 0.12 85 / 0.3)" }}
-              className="mb-6"
-            />
-            {searchQuery.trim().length === 0 ? (
-              <div className="text-center text-muted-foreground font-display text-xs uppercase tracking-widest mt-12">
-                Start typing to search the collection
-              </div>
-            ) : (
-              (() => {
-                const q = searchQuery.toLowerCase().trim();
-                // Smart AI-style matching: synonyms + keyword recognition
-                const synonyms: Record<string, string[]> = {
-                  shirt: ["t-shirt", "tee", "top", "tshirt"],
-                  pants: ["trousers", "bottoms", "lower", "jogger", "baggy"],
-                  jacket: ["hoodie", "coat", "outerwear", "sweatshirt"],
-                  black: ["dark", "midnight", "noir"],
-                  white: ["cream", "ivory", "off-white", "light"],
-                  premium: ["luxury", "quality", "exclusive"],
-                  oversized: ["baggy", "loose", "relaxed", "wide"],
-                  slim: ["skinny", "fitted", "tapered"],
-                };
-                const expandedTerms = [q];
-                for (const [key, vals] of Object.entries(synonyms)) {
-                  if (q.includes(key))
-                    for (const v of vals) expandedTerms.push(v);
-                  if (vals.some((v) => q.includes(v))) expandedTerms.push(key);
-                }
-                const scored = products
-                  .map((p) => {
-                    const text = `${p.name} ${p.description}`.toLowerCase();
-                    let score = 0;
-                    for (const term of expandedTerms) {
-                      if (p.name.toLowerCase().includes(term)) score += 10;
-                      if (p.description.toLowerCase().includes(term))
-                        score += 5;
-                      if (text.includes(term)) score += 2;
-                    }
-                    return { p, score };
-                  })
-                  .filter((x) => x.score > 0)
-                  .sort((a, b) => b.score - a.score);
-                if (scored.length === 0) {
-                  return (
-                    <div className="text-center py-12">
-                      <p className="text-muted-foreground font-display text-sm uppercase tracking-widest mb-2">
-                        No results found
-                      </p>
-                      <p className="text-muted-foreground text-xs">
-                        Try different keywords like "shirt", "pants", or
-                        "oversized"
-                      </p>
-                    </div>
-                  );
-                }
-                return (
-                  <div>
-                    <p
-                      className="text-xs uppercase tracking-widest font-display mb-4"
-                      style={{ color: "oklch(0.85 0.12 85)" }}
-                    >
-                      {scored.length} result{scored.length !== 1 ? "s" : ""}{" "}
-                      found
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {scored.map(({ p }) => {
-                        const discountedPrice = sale.enabled
-                          ? Math.round(p.price * (1 - sale.discount / 100))
-                          : p.price;
-                        return (
-                          <button
-                            key={p.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedProduct(p);
-                              setShowSearch(false);
-                            }}
-                            className="flex gap-4 items-center text-left rounded-xl p-3 transition-all hover:scale-[1.02]"
-                            style={{
-                              background: "oklch(0.12 0.01 60)",
-                              border: "1px solid oklch(0.25 0.03 70)",
-                            }}
-                          >
-                            {p.images[0] && (
-                              <img
-                                src={p.images[0]}
-                                alt={p.name}
-                                className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
-                                style={{ background: "oklch(0.15 0.01 60)" }}
-                              />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="font-display font-bold text-sm text-foreground truncate">
-                                {p.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                                {p.description}
-                              </p>
-                              <div className="flex items-center gap-2 mt-1.5">
-                                <span
-                                  className="font-bold text-sm"
-                                  style={{ color: "oklch(0.85 0.12 85)" }}
-                                >
-                                  ₹{discountedPrice}
-                                </span>
-                                {sale.enabled && (
-                                  <span className="text-xs line-through text-muted-foreground">
-                                    ₹{p.price}
-                                  </span>
-                                )}
-                                {p.bestSeller && (
-                                  <span
-                                    className="text-xs px-1.5 py-0.5 rounded"
-                                    style={{
-                                      background: "oklch(0.85 0.12 85 / 0.15)",
-                                      color: "oklch(0.85 0.12 85)",
-                                    }}
-                                  >
-                                    Best Seller
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()
-            )}
-          </div>
-        </div>
       )}
 
       {showAdminLogin && (
