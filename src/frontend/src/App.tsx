@@ -49,6 +49,7 @@ const LS_BANNER_KEY = "rocher_custom_banner";
 const LS_BG_KEY = "rocher_custom_bg";
 const LS_INSTA_KEY = "rocher_instagram_id";
 const LS_SECTIONS_KEY = "rocher_custom_sections";
+const LS_SEO_TITLE_KEY = "rocher_seo_title";
 const LS_ORDERS_KEY = "rocher_orders";
 const LS_ACTIVITY_KEY = "rocher_activity_log";
 const LS_GOOGLE_USER_KEY = "rocher_google_user";
@@ -409,6 +410,17 @@ function loadInstagramId(): string {
     return localStorage.getItem(LS_INSTA_KEY) || "official_rocher";
   } catch {
     return "official_rocher";
+  }
+}
+
+function loadSeoTitle(): string {
+  try {
+    return (
+      localStorage.getItem(LS_SEO_TITLE_KEY) ||
+      "ROCHER | Premium Clothing Brand"
+    );
+  } catch {
+    return "ROCHER | Premium Clothing Brand";
   }
 }
 
@@ -2341,6 +2353,7 @@ function AdminPanel({
   instagramId: initialInstaId,
   customSections: initialSections,
   founderData: initialFounder,
+  seoTitle: initialSeoTitle,
   actor,
   onClose,
 }: {
@@ -2353,6 +2366,7 @@ function AdminPanel({
   instagramId: string;
   customSections: ProductSection[];
   founderData: FounderData;
+  seoTitle: string;
   actor: backendInterface | null;
   onClose: (
     updated?: Product[],
@@ -2364,6 +2378,7 @@ function AdminPanel({
     newInstaId?: string,
     newSections?: ProductSection[],
     newFounder?: FounderData,
+    newSeoTitle?: string,
   ) => void;
 }) {
   const [editData, setEditData] = useState<AdminProduct[]>(
@@ -2401,6 +2416,7 @@ function AdminPanel({
   const [founderPhoto, setFounderPhoto] = useState<string>(
     initialFounder.photo,
   );
+  const [seoTitle, setSeoTitle] = useState<string>(initialSeoTitle);
   const [promoAddOpen, setPromoAddOpen] = useState(false);
   const [paymentAddOpen, setPaymentAddOpen] = useState(false);
   const [newPromoCode, setNewPromoCode] = useState("");
@@ -2531,6 +2547,14 @@ function AdminPanel({
     const trimmedInsta = instaId.trim().replace(/^@/, "") || "official_rocher";
     localStorage.setItem(LS_INSTA_KEY, trimmedInsta);
     localStorage.setItem(LS_SECTIONS_KEY, JSON.stringify(sections));
+    const trimmedSeoTitle =
+      seoTitle.trim() || "ROCHER | Premium Clothing Brand";
+    localStorage.setItem(LS_SEO_TITLE_KEY, trimmedSeoTitle);
+    document.title = trimmedSeoTitle;
+    const metaTitleEl = document.querySelector('meta[property="og:title"]');
+    if (metaTitleEl) metaTitleEl.setAttribute("content", trimmedSeoTitle);
+    const twitterTitleEl = document.querySelector('meta[name="twitter:title"]');
+    if (twitterTitleEl) twitterTitleEl.setAttribute("content", trimmedSeoTitle);
 
     // Reconstruct full product list
     const merged: Product[] = DEFAULT_PRODUCTS.filter(
@@ -2567,6 +2591,7 @@ function AdminPanel({
           name: founderName,
           title: founderTitle,
         },
+        seoTitle: seoTitle.trim() || "ROCHER | Premium Clothing Brand",
       };
       actor
         .setValue("siteData", JSON.stringify(canisterData), ADMIN_PASSWORD)
@@ -2604,6 +2629,7 @@ function AdminPanel({
       instaId.trim().replace(/^@/, "") || "official_rocher",
       sections,
       newFounder,
+      seoTitle.trim() || "ROCHER | Premium Clothing Brand",
     );
   };
 
@@ -2941,6 +2967,25 @@ function AdminPanel({
                 </div>
               </div>
             </div>
+            {/* SEO Title */}
+            <div className="bg-card border border-border rounded-xl p-6 shadow-card space-y-4 mt-0">
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                Google Search Title
+              </p>
+              <input
+                type="text"
+                value={seoTitle}
+                onChange={(e) => setSeoTitle(e.target.value)}
+                placeholder="ROCHER | Premium Clothing Brand"
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+              />
+              <p className="text-xs text-muted-foreground">
+                This is the title shown when someone finds your site on Google
+                or shares the link. Keep it under 60 characters for best
+                results.
+              </p>
+            </div>
+
             {/* Instagram ID */}
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">
@@ -4935,6 +4980,7 @@ export default function App() {
   const [founderData, setFounderData] = useState<FounderData>(() =>
     loadFounderData(),
   );
+  const [seoTitle, setSeoTitle] = useState<string>(() => loadSeoTitle());
   const [activeSection, setActiveSection] = useState<string>("__all__");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
@@ -6099,6 +6145,7 @@ export default function App() {
           instagramId={instagramId}
           customSections={customSections}
           founderData={founderData}
+          seoTitle={seoTitle}
           actor={actor}
           onClose={(
             updated,
@@ -6110,6 +6157,7 @@ export default function App() {
             newInstaId,
             newSections,
             newFounder,
+            newSeoTitle,
           ) => {
             if (updated) setProducts(updated);
             if (newSale) setSale(newSale);
@@ -6123,6 +6171,7 @@ export default function App() {
               setFounderData(newFounder);
               saveFounderData(newFounder);
             }
+            if (newSeoTitle !== undefined) setSeoTitle(newSeoTitle);
             setShowAdminPanel(false);
           }}
         />
