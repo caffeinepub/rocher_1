@@ -32,7 +32,9 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { backendInterface } from "./backend";
+import { createStorageClientWithConfig } from "./config";
 import { useActor } from "./hooks/useActor";
+import type { StorageClient } from "./utils/StorageClient";
 
 const LOGO =
   "/assets/uploads/rocher_2_logo-019d2487-1d4d-76d8-902f-54fb04dc6ff6-5.png";
@@ -50,6 +52,7 @@ const LS_BG_KEY = "rocher_custom_bg";
 const LS_INSTA_KEY = "rocher_instagram_id";
 const LS_SECTIONS_KEY = "rocher_custom_sections";
 const LS_SEO_TITLE_KEY = "rocher_seo_title";
+const LS_MATERIAL_KEY = "rocher_material_line";
 const LS_ORDERS_KEY = "rocher_orders";
 const LS_ACTIVITY_KEY = "rocher_activity_log";
 const LS_GOOGLE_USER_KEY = "rocher_google_user";
@@ -428,6 +431,17 @@ function loadSeoTitle(): string {
   }
 }
 
+function loadMaterialLine(): string {
+  try {
+    return (
+      localStorage.getItem(LS_MATERIAL_KEY) ||
+      "100% Premium Cotton — Machine wash cold"
+    );
+  } catch {
+    return "100% Premium Cotton — Machine wash cold";
+  }
+}
+
 interface FounderData {
   photo: string;
   note: string;
@@ -525,6 +539,7 @@ function ProductModal({
   onAddToCart,
   onDirectBuy,
   instagramId,
+  materialLine,
 }: {
   product: Product;
   sale: SaleSettings;
@@ -532,6 +547,7 @@ function ProductModal({
   onAddToCart: (item: CartItem) => void;
   onDirectBuy?: (item: CheckoutItem) => void;
   instagramId?: string;
+  materialLine?: string;
 }) {
   const [imgIndex, setImgIndex] = useState(0);
   const [size, setSize] = useState("");
@@ -871,7 +887,7 @@ function ProductModal({
               {product.description}
             </p>
             <p className="text-xs text-muted-foreground italic">
-              100% Premium Cotton — Machine wash cold
+              {materialLine ?? "100% Premium Cotton — Machine wash cold"}
             </p>
 
             {/* Size guide */}
@@ -2608,6 +2624,19 @@ function compressImage(
 }
 
 /* ─── IMAGE URL PREVIEW ─── */
+
+async function uploadBase64ToBlob(
+  storageClient: StorageClient,
+  dataUrl: string,
+): Promise<string> {
+  const base64 = dataUrl.split(",")[1];
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const { hash } = await storageClient.putFile(bytes);
+  const url = await storageClient.getDirectURL(hash);
+  return url;
+}
 function ImageUrlField({
   value,
   onChange,
@@ -2745,7 +2774,9 @@ function AdminPanel({
   customSections: initialSections,
   founderData: initialFounder,
   seoTitle: initialSeoTitle,
+  materialLine: initialMaterialLine,
   actor,
+  storageClient,
   onClose,
 }: {
   products: Product[];
@@ -2758,7 +2789,9 @@ function AdminPanel({
   customSections: ProductSection[];
   founderData: FounderData;
   seoTitle: string;
+  materialLine: string;
   actor: backendInterface | null;
+  storageClient: StorageClient | null;
   onClose: (
     updated?: Product[],
     newSale?: SaleSettings,
@@ -2770,6 +2803,7 @@ function AdminPanel({
     newSections?: ProductSection[],
     newFounder?: FounderData,
     newSeoTitle?: string,
+    newMaterialLine?: string,
   ) => void;
 }) {
   const [editData, setEditData] = useState<AdminProduct[]>(
@@ -2808,6 +2842,7 @@ function AdminPanel({
     initialFounder.photo,
   );
   const [seoTitle, setSeoTitle] = useState<string>(initialSeoTitle);
+  const [materialLine, setMaterialLine] = useState<string>(initialMaterialLine);
   const [promoAddOpen, setPromoAddOpen] = useState(false);
   const [paymentAddOpen, setPaymentAddOpen] = useState(false);
   const [newPromoCode, setNewPromoCode] = useState("");
@@ -2895,7 +2930,7 @@ function AdminPanel({
     toast.success(`"${newProd.name}" added! Remember to Save Changes.`);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Figure out which default IDs were deleted
     const defaultIds = DEFAULT_PRODUCTS.map((d) => d.id);
     const remainingIds = editData.map((e) => e.id);
@@ -2946,6 +2981,10 @@ function AdminPanel({
     if (metaTitleEl) metaTitleEl.setAttribute("content", trimmedSeoTitle);
     const twitterTitleEl = document.querySelector('meta[name="twitter:title"]');
     if (twitterTitleEl) twitterTitleEl.setAttribute("content", trimmedSeoTitle);
+    localStorage.setItem(
+      LS_MATERIAL_KEY,
+      materialLine.trim() || "100% Premium Cotton — Machine wash cold",
+    );
 
     // Reconstruct full product list
     const merged: Product[] = DEFAULT_PRODUCTS.filter(
@@ -2984,10 +3023,63 @@ function AdminPanel({
           title: founderTitle,
         },
         seoTitle: seoTitle.trim() || "ROCHER | Premium Clothing Brand",
+        materialLine:
+          materialLine.trim() || "100% Premium Cotton — Machine wash cold",
       };
-      actor
-        .setValue("siteData", JSON.stringify(canisterData), ADMIN_PASSWORD)
-        .then((ok) => {
+      // Upload base64 images to blob storage
+      if (storageClient) {
+        toast.loading("Publishing images...", { id: "img-upload" });
+        try {
+          for (const prod of allProducts) {
+            const uploadedImages: string[] = [];
+            for (const img of prod.images) {
+              if (img.startsWith("data:")) {
+                const url = await uploadBase64ToBlob(storageClient, img);
+                uploadedImages.push(url);
+              } else {
+                uploadedImages.push(img);
+              }
+            }
+            prod.images = uploadedImages;
+          }
+          if (canisterData.founderData.photo?.startsWith("data:")) {
+            canisterData.founderData.photo = await uploadBase64ToBlob(
+              storageClient,
+              canisterData.founderData.photo,
+            );
+          }
+          if (canisterData.bannerImage?.startsWith("data:")) {
+            canisterData.bannerImage = await uploadBase64ToBlob(
+              storageClient,
+              canisterData.bannerImage,
+            );
+          }
+          toast.dismiss("img-upload");
+        } catch (_e) {
+          toast.dismiss("img-upload");
+          toast.error("Image upload failed. Try saving again.");
+          return;
+        }
+      }
+      // Write main data plus separate fallback keys for resilience on mobile
+      Promise.all([
+        actor.setValue(
+          "siteData",
+          JSON.stringify(canisterData),
+          ADMIN_PASSWORD,
+        ),
+        actor.setValue(
+          "siteData_sections",
+          JSON.stringify(canisterData.customSections || []),
+          ADMIN_PASSWORD,
+        ),
+        actor.setValue(
+          "siteData_products",
+          JSON.stringify(canisterData.products || []),
+          ADMIN_PASSWORD,
+        ),
+      ])
+        .then(([ok]) => {
           if (ok) {
             toast.success("Changes published to all visitors ✓");
           } else {
@@ -3022,6 +3114,7 @@ function AdminPanel({
       sections,
       newFounder,
       seoTitle.trim() || "ROCHER | Premium Clothing Brand",
+      materialLine.trim() || "100% Premium Cotton — Machine wash cold",
     );
   };
 
@@ -3375,6 +3468,24 @@ function AdminPanel({
                 This is the title shown when someone finds your site on Google
                 or shares the link. Keep it under 60 characters for best
                 results.
+              </p>
+            </div>
+
+            {/* Material Line */}
+            <div className="bg-card border border-border rounded-xl p-6 shadow-card space-y-4 mt-0">
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                Product Material Description
+              </p>
+              <input
+                type="text"
+                value={materialLine}
+                onChange={(e) => setMaterialLine(e.target.value)}
+                placeholder="100% Premium Cotton — Machine wash cold"
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+              />
+              <p className="text-xs text-muted-foreground">
+                This line appears under every product description (e.g. "100%
+                Premium Cotton — Machine wash cold").
               </p>
             </div>
 
@@ -4955,6 +5066,7 @@ function ProductCard({
   onDirectBuy,
   index,
   instagramId,
+  materialLine,
 }: {
   product: Product;
   sale: SaleSettings;
@@ -4963,6 +5075,7 @@ function ProductCard({
   onDirectBuy: (item: CheckoutItem) => void;
   index: number;
   instagramId?: string;
+  materialLine?: string;
 }) {
   const [imgIndex, setImgIndex] = useState(0);
   const [selectedSize, setSelectedSize] = useState("");
@@ -5095,7 +5208,7 @@ function ProductCard({
           {product.description}
         </p>
         <p className="text-xs text-muted-foreground/60 italic mb-3">
-          100% Premium Cotton
+          {materialLine ?? "100% Premium Cotton — Machine wash cold"}
         </p>
         <div
           className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full mb-4"
@@ -5464,7 +5577,15 @@ function CartDrawer({
 /* ─── APP ─── */
 export default function App() {
   const { actor } = useActor();
-  const [canisterLoaded, setCanisterLoaded] = useState(false);
+  const [storageClient, setStorageClient] = useState<StorageClient | null>(
+    null,
+  );
+  const [_canisterLoaded, setCanisterLoaded] = useState(false);
+  useEffect(() => {
+    createStorageClientWithConfig()
+      .then(setStorageClient)
+      .catch(() => {});
+  }, []);
   const [products, setProducts] = useState<Product[]>(() => loadProducts());
   const [sale, setSale] = useState<SaleSettings>(() => loadSaleSettings());
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>(() =>
@@ -5487,6 +5608,9 @@ export default function App() {
     loadFounderData(),
   );
   const [seoTitle, setSeoTitle] = useState<string>(() => loadSeoTitle());
+  const [materialLine, setMaterialLine] = useState<string>(() =>
+    loadMaterialLine(),
+  );
   const [activeSection, setActiveSection] = useState<string>("__all__");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
@@ -5542,17 +5666,24 @@ export default function App() {
     setCanisterActor(actor);
   }, [actor]);
 
-  // Load site data from canister on first load
+  // Load site data from canister — retries every 6s until successful so mobile doesn't get stuck
   useEffect(() => {
-    if (!actor || canisterLoaded) return;
+    if (!actor) return;
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
     async function loadFromCanister() {
       try {
-        const [siteDataStr, ordersStr] = await Promise.all([
-          actor!.getValue("siteData"),
-          actor!.getValue("orders"),
-        ]);
+        // Fetch main data + separate fallback keys in parallel for resilience
+        const [siteDataStr, ordersStr, sectionsStr, productsStr] =
+          await Promise.all([
+            actor!.getValue("siteData"),
+            actor!.getValue("orders"),
+            actor!.getValue("siteData_sections"),
+            actor!.getValue("siteData_products"),
+          ]);
         if (cancelled) return;
+        let loadedOk = false;
+        let sectionsLoadedFromMain = false;
         if (siteDataStr) {
           try {
             const data = JSON.parse(siteDataStr) as {
@@ -5563,8 +5694,10 @@ export default function App() {
               bannerImage?: string;
               bgColor?: string;
             };
-            if (Array.isArray(data.products) && data.products.length > 0)
+            if (Array.isArray(data.products) && data.products.length > 0) {
               setProducts(data.products);
+              loadedOk = true;
+            }
             if (data.saleSettings) setSale(data.saleSettings);
             if (Array.isArray(data.promoCodes)) setPromoCodes(data.promoCodes);
             if (Array.isArray(data.paymentMethods))
@@ -5574,12 +5707,41 @@ export default function App() {
             if (data.bgColor !== undefined) setCustomBg(data.bgColor);
             if ((data as any).instagramId)
               setInstagramId((data as any).instagramId);
-            if (Array.isArray((data as any).customSections))
+            if (
+              Array.isArray((data as any).customSections) &&
+              (data as any).customSections.length > 0
+            ) {
               setCustomSections((data as any).customSections);
+              sectionsLoadedFromMain = true;
+            }
             if ((data as any).founderData) {
               const fd = { ...DEFAULT_FOUNDER, ...(data as any).founderData };
               setFounderData(fd);
               saveFounderData(fd);
+            }
+            if ((data as any).materialLine) {
+              setMaterialLine((data as any).materialLine);
+              localStorage.setItem(LS_MATERIAL_KEY, (data as any).materialLine);
+            }
+          } catch {}
+        }
+        // Fallback: load sections from separate key if not found in main data
+        if (!sectionsLoadedFromMain && sectionsStr) {
+          try {
+            const secs = JSON.parse(sectionsStr) as ProductSection[];
+            if (Array.isArray(secs) && secs.length > 0) {
+              setCustomSections(secs);
+              sectionsLoadedFromMain = true;
+            }
+          } catch {}
+        }
+        // Fallback: load products from separate key if not found in main data
+        if (!loadedOk && productsStr) {
+          try {
+            const prods = JSON.parse(productsStr) as Product[];
+            if (Array.isArray(prods) && prods.length > 0) {
+              setProducts(prods);
+              loadedOk = true;
             }
           } catch {}
         }
@@ -5591,14 +5753,24 @@ export default function App() {
             }
           } catch {}
         }
-      } catch {}
-      if (!cancelled) setCanisterLoaded(true);
+        if (!cancelled) setCanisterLoaded(true);
+        // Retry if products or sections didn't load yet
+        if ((!loadedOk || !sectionsLoadedFromMain) && !cancelled) {
+          retryTimer = setTimeout(loadFromCanister, 5000);
+        }
+      } catch {
+        // Network or canister error — retry after 6 seconds
+        if (!cancelled) {
+          retryTimer = setTimeout(loadFromCanister, 6000);
+        }
+      }
     }
     loadFromCanister();
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [actor, canisterLoaded]);
+  }, [actor]);
 
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -5692,17 +5864,76 @@ export default function App() {
             </button>
 
             <nav className="hidden md:flex items-center gap-8">
-              {navLinks.map((link) => (
-                <button
-                  type="button"
-                  key={link.id}
-                  onClick={() => scrollTo(link.id)}
-                  data-ocid="nav.link"
-                  className="font-display text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-brand-gold transition-colors"
-                >
-                  {link.label}
-                </button>
-              ))}
+              {navLinks.map((link) =>
+                link.id === "products" ? (
+                  <div key={link.id} className="relative group">
+                    <button
+                      type="button"
+                      onClick={() => scrollTo(link.id)}
+                      data-ocid="nav.link"
+                      className="font-display text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-brand-gold transition-colors flex items-center gap-1"
+                    >
+                      {link.label}
+                      <ChevronDown
+                        size={10}
+                        className="opacity-60 group-hover:opacity-100 transition-opacity"
+                      />
+                    </button>
+                    {/* Section dropdown */}
+                    <div
+                      className="absolute top-full left-1/2 -translate-x-1/2 mt-2 min-w-[160px] rounded-xl border border-border/60 shadow-xl overflow-hidden opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50"
+                      style={{
+                        backgroundColor: "oklch(0.09 0.008 60 / 0.97)",
+                        backdropFilter: "blur(16px)",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          scrollTo("products");
+                          setActiveSection("__all__");
+                        }}
+                        className={`block w-full text-left px-4 py-2.5 font-display text-xs uppercase tracking-widest transition-colors ${activeSection === "__all__" ? "text-brand-gold" : "text-muted-foreground hover:text-brand-gold"}`}
+                      >
+                        All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          scrollTo("products");
+                          setActiveSection("__new__");
+                        }}
+                        className={`block w-full text-left px-4 py-2.5 font-display text-xs uppercase tracking-widest transition-colors ${activeSection === "__new__" ? "text-brand-gold" : "text-muted-foreground hover:text-brand-gold"}`}
+                      >
+                        New Arrivals
+                      </button>
+                      {customSections.map((sec) => (
+                        <button
+                          key={sec.id}
+                          type="button"
+                          onClick={() => {
+                            scrollTo("products");
+                            setActiveSection(sec.id);
+                          }}
+                          className={`block w-full text-left px-4 py-2.5 font-display text-xs uppercase tracking-widest transition-colors ${activeSection === sec.id ? "text-brand-gold" : "text-muted-foreground hover:text-brand-gold"}`}
+                        >
+                          {sec.title}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    key={link.id}
+                    onClick={() => scrollTo(link.id)}
+                    data-ocid="nav.link"
+                    className="font-display text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-brand-gold transition-colors"
+                  >
+                    {link.label}
+                  </button>
+                ),
+              )}
               <button
                 type="button"
                 onClick={() => setShowTrackOrder(true)}
@@ -5808,19 +6039,72 @@ export default function App() {
 
           {mobileMenuOpen && (
             <div className="md:hidden pb-4 border-t border-border mt-2 pt-4 animate-fade-in">
-              {navLinks.map((link) => (
-                <button
-                  type="button"
-                  key={link.id}
-                  onClick={() => {
-                    scrollTo(link.id);
-                    setMobileMenuOpen(false);
-                  }}
-                  className="block w-full text-left py-2 font-display text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-brand-gold transition-colors"
-                >
-                  {link.label}
-                </button>
-              ))}
+              {navLinks.map((link) =>
+                link.id === "products" ? (
+                  <div key={link.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        scrollTo(link.id);
+                        setMobileMenuOpen(false);
+                      }}
+                      className="block w-full text-left py-2 font-display text-xs uppercase tracking-[0.2em] text-brand-gold transition-colors"
+                    >
+                      {link.label}
+                    </button>
+                    <div className="pl-3 border-l border-border/40 mb-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          scrollTo("products");
+                          setActiveSection("__all__");
+                          setMobileMenuOpen(false);
+                        }}
+                        className={`block w-full text-left py-1.5 font-display text-xs uppercase tracking-[0.15em] transition-colors ${activeSection === "__all__" ? "text-brand-gold" : "text-muted-foreground"}`}
+                      >
+                        All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          scrollTo("products");
+                          setActiveSection("__new__");
+                          setMobileMenuOpen(false);
+                        }}
+                        className={`block w-full text-left py-1.5 font-display text-xs uppercase tracking-[0.15em] transition-colors ${activeSection === "__new__" ? "text-brand-gold" : "text-muted-foreground"}`}
+                      >
+                        New Arrivals
+                      </button>
+                      {customSections.map((sec) => (
+                        <button
+                          key={sec.id}
+                          type="button"
+                          onClick={() => {
+                            scrollTo("products");
+                            setActiveSection(sec.id);
+                            setMobileMenuOpen(false);
+                          }}
+                          className={`block w-full text-left py-1.5 font-display text-xs uppercase tracking-[0.15em] transition-colors ${activeSection === sec.id ? "text-brand-gold" : "text-muted-foreground"}`}
+                        >
+                          {sec.title}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    key={link.id}
+                    onClick={() => {
+                      scrollTo(link.id);
+                      setMobileMenuOpen(false);
+                    }}
+                    className="block w-full text-left py-2 font-display text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-brand-gold transition-colors"
+                  >
+                    {link.label}
+                  </button>
+                ),
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -5952,7 +6236,7 @@ export default function App() {
       </section>
 
       {/* STICKY SECTION BAR */}
-      {customSections.length > 0 && (
+      {
         <div
           className="sticky z-30 w-full border-b border-border/60"
           style={{
@@ -5990,7 +6274,7 @@ export default function App() {
             </div>
           </div>
         </div>
-      )}
+      }
 
       {/* PRODUCTS */}
       <section id="products" className="py-24 px-4 max-w-7xl mx-auto">
@@ -6050,6 +6334,7 @@ export default function App() {
                   onDirectBuy={handleDirectBuy}
                   index={i}
                   instagramId={instagramId}
+                  materialLine={materialLine}
                 />
               ))}
             </div>
@@ -6217,6 +6502,7 @@ export default function App() {
           }}
           onDirectBuy={handleDirectBuy}
           instagramId={instagramId}
+          materialLine={materialLine}
         />
       )}
 
@@ -6779,7 +7065,9 @@ export default function App() {
           customSections={customSections}
           founderData={founderData}
           seoTitle={seoTitle}
+          materialLine={materialLine}
           actor={actor}
+          storageClient={storageClient}
           onClose={(
             updated,
             newSale,
@@ -6791,6 +7079,7 @@ export default function App() {
             newSections,
             newFounder,
             newSeoTitle,
+            newMaterialLine,
           ) => {
             if (updated) setProducts(updated);
             if (newSale) setSale(newSale);
@@ -6805,6 +7094,7 @@ export default function App() {
               saveFounderData(newFounder);
             }
             if (newSeoTitle !== undefined) setSeoTitle(newSeoTitle);
+            if (newMaterialLine !== undefined) setMaterialLine(newMaterialLine);
             setShowAdminPanel(false);
           }}
         />
