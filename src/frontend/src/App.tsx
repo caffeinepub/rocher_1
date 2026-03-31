@@ -401,14 +401,35 @@ function loadCustomBg(): string {
   }
 }
 
+const DEFAULT_SECTIONS: ProductSection[] = [
+  {
+    id: "gym-tshirt",
+    title: "Gym T-Shirt",
+    subtitle: "Premium oversized gym tees",
+    productIds: [],
+  },
+  {
+    id: "baggy-pants",
+    title: "Baggy Pants",
+    subtitle: "Oversized streetwear pants",
+    productIds: [],
+  },
+];
+
 function loadSections(): ProductSection[] {
   try {
     const raw = localStorage.getItem(LS_SECTIONS_KEY);
-    if (!raw) return [];
+    if (!raw) return DEFAULT_SECTIONS;
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_SECTIONS;
+    // Ensure default sections always exist
+    const existingIds = parsed.map((s: ProductSection) => s.id);
+    const missing = DEFAULT_SECTIONS.filter(
+      (ds) => !existingIds.includes(ds.id),
+    );
+    return [...parsed, ...missing];
   } catch {
-    return [];
+    return DEFAULT_SECTIONS;
   }
 }
 
@@ -2398,7 +2419,7 @@ function TrackOrderModal({ onClose }: { onClose: () => void }) {
                       className="text-xs font-bold px-3 py-1 rounded-full"
                       style={{
                         background: "oklch(0.85 0.12 85 / 0.1)",
-                        color: "oklch(0.85 0.12 85)",
+                        color: "oklch(0.99 0 0)",
                       }}
                     >
                       Active
@@ -2413,7 +2434,7 @@ function TrackOrderModal({ onClose }: { onClose: () => void }) {
                       <div
                         className="absolute left-0 top-4 h-0.5 z-0 transition-all duration-500"
                         style={{
-                          background: "oklch(0.85 0.12 85)",
+                          background: "oklch(0.99 0 0)",
                           width:
                             currentStep <= 0
                               ? "0%"
@@ -2432,14 +2453,14 @@ function TrackOrderModal({ onClose }: { onClose: () => void }) {
                               style={
                                 done
                                   ? {
-                                      background: "oklch(0.85 0.12 85)",
-                                      borderColor: "oklch(0.85 0.12 85)",
-                                      color: "oklch(0.09 0.008 60)",
+                                      background: "oklch(0.99 0 0)",
+                                      borderColor: "oklch(0.99 0 0)",
+                                      color: "oklch(0.06 0 0)",
                                     }
                                   : {
                                       background: "oklch(0.12 0.01 60)",
                                       borderColor: "oklch(0.3 0.02 60)",
-                                      color: "oklch(0.5 0.02 60)",
+                                      color: "oklch(0.5 0 0)",
                                     }
                               }
                             >
@@ -2450,8 +2471,8 @@ function TrackOrderModal({ onClose }: { onClose: () => void }) {
                               style={{
                                 fontSize: "9px",
                                 color: done
-                                  ? "oklch(0.85 0.12 85)"
-                                  : "oklch(0.5 0.02 60)",
+                                  ? "oklch(0.99 0 0)"
+                                  : "oklch(0.5 0 0)",
                                 maxWidth: "52px",
                               }}
                             >
@@ -3194,7 +3215,7 @@ function AdminPanel({
       <header
         className="sticky top-0 z-10 border-b border-border px-6 py-4 flex items-center justify-between"
         style={{
-          backgroundColor: "oklch(0.09 0.008 60 / 0.97)",
+          backgroundColor: "oklch(0.06 0 0 / 0.97)",
           backdropFilter: "blur(12px)",
         }}
       >
@@ -3237,7 +3258,7 @@ function AdminPanel({
       <div
         className="border-b border-border sticky top-[73px] z-10 px-6"
         style={{
-          backgroundColor: "oklch(0.09 0.008 60 / 0.97)",
+          backgroundColor: "oklch(0.06 0 0 / 0.97)",
           backdropFilter: "blur(12px)",
         }}
       >
@@ -3529,14 +3550,14 @@ function AdminPanel({
                       src={founderPhoto}
                       alt="Founder"
                       className="w-20 h-20 rounded-full object-cover border-2 flex-shrink-0"
-                      style={{ borderColor: "oklch(0.85 0.12 85 / 0.4)" }}
+                      style={{ borderColor: "oklch(0.99 0 0 / 0.25)" }}
                     />
                   ) : (
                     <div
                       className="w-20 h-20 rounded-full flex-shrink-0 flex items-center justify-center border-2 border-dashed"
                       style={{
-                        borderColor: "oklch(0.85 0.12 85 / 0.3)",
-                        color: "oklch(0.5 0.02 60)",
+                        borderColor: "oklch(0.99 0 0 / 0.2)",
+                        color: "oklch(0.5 0 0)",
                       }}
                     >
                       <span className="text-xs text-center leading-tight px-1">
@@ -3688,8 +3709,8 @@ function AdminPanel({
                       <span
                         className="px-2 py-0.5 rounded text-xs font-bold uppercase"
                         style={{
-                          background: "oklch(0.85 0.12 85 / 0.15)",
-                          color: "oklch(0.85 0.12 85)",
+                          background: "oklch(0.99 0 0 / 0.08)",
+                          color: "oklch(0.99 0 0)",
                         }}
                       >
                         {pm.type}
@@ -3888,8 +3909,8 @@ function AdminPanel({
                     className="font-mono font-bold text-sm px-3 py-1 rounded-md"
                     style={{
                       background: "oklch(0.85 0.12 85 / 0.1)",
-                      color: "oklch(0.85 0.12 85)",
-                      border: "1px solid oklch(0.85 0.12 85 / 0.3)",
+                      color: "oklch(0.99 0 0)",
+                      border: "1px solid oklch(0.99 0 0 / 0.2)",
                     }}
                   >
                     {promo.code}
@@ -4683,7 +4704,7 @@ function AdminPanel({
                                 className="text-xs font-bold px-2 py-0.5 rounded uppercase tracking-widest"
                                 style={{
                                   background: "oklch(0.85 0.12 85 / 0.1)",
-                                  color: "oklch(0.85 0.12 85)",
+                                  color: "oklch(0.99 0 0)",
                                 }}
                               >
                                 {order.trackingStatus.replace(/_/g, " ")}
@@ -4713,7 +4734,7 @@ function AdminPanel({
                               borderColor:
                                 order.upiPaymentStatus === "verified"
                                   ? "oklch(0.7 0.15 145 / 0.5)"
-                                  : "oklch(0.85 0.12 85 / 0.4)",
+                                  : "oklch(0.99 0 0 / 0.25)",
                               background:
                                 order.upiPaymentStatus === "verified"
                                   ? "oklch(0.7 0.15 145 / 0.08)"
@@ -4726,7 +4747,7 @@ function AdminPanel({
                                 color:
                                   order.upiPaymentStatus === "verified"
                                     ? "oklch(0.7 0.15 145)"
-                                    : "oklch(0.85 0.12 85)",
+                                    : "oklch(0.99 0 0)",
                               }}
                             >
                               {order.upiPaymentStatus === "verified"
@@ -4932,8 +4953,8 @@ function RegisteredUsersPanel() {
             style={{
               background: u.blocked
                 ? "oklch(0.3 0.08 25 / 0.3)"
-                : "oklch(0.85 0.12 85 / 0.15)",
-              color: u.blocked ? "oklch(0.7 0.15 25)" : "oklch(0.85 0.12 85)",
+                : "oklch(0.99 0 0 / 0.08)",
+              color: u.blocked ? "oklch(0.7 0.15 25)" : "oklch(0.99 0 0)",
             }}
           >
             {u.name ? u.name[0].toUpperCase() : "?"}
@@ -5020,7 +5041,7 @@ function ActivityLogPanel() {
         const dotColor = isLogin
           ? "oklch(0.75 0.12 300)"
           : isAdmin
-            ? "oklch(0.85 0.12 85)"
+            ? "oklch(0.99 0 0)"
             : "oklch(0.7 0.15 160)";
         return (
           <div
@@ -5214,8 +5235,8 @@ function ProductCard({
           className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full mb-4"
           style={{
             background: "oklch(0.85 0.12 85 / 0.1)",
-            color: "oklch(0.85 0.12 85)",
-            border: "1px solid oklch(0.85 0.12 85 / 0.3)",
+            color: "oklch(0.99 0 0)",
+            border: "1px solid oklch(0.99 0 0 / 0.2)",
           }}
         >
           <RotateCcw size={10} /> 7-Day Returns
@@ -5443,13 +5464,13 @@ function CartDrawer({
                     className="flex items-center justify-between px-3 py-2 rounded-lg"
                     style={{
                       background: "oklch(0.85 0.12 85 / 0.1)",
-                      border: "1px solid oklch(0.85 0.12 85 / 0.3)",
+                      border: "1px solid oklch(0.99 0 0 / 0.2)",
                     }}
                     data-ocid="cart.success_state"
                   >
                     <span
                       className="flex items-center gap-1.5 text-xs font-bold"
-                      style={{ color: "oklch(0.85 0.12 85)" }}
+                      style={{ color: "oklch(0.99 0 0)" }}
                     >
                       <Check size={13} /> {appliedPromo.code} —{" "}
                       {appliedPromo.discount}% OFF
@@ -5532,8 +5553,8 @@ function CartDrawer({
                         style={
                           selectedPayment === pm.id
                             ? {
-                                background: "oklch(0.85 0.12 85)",
-                                color: "oklch(0.09 0.008 60)",
+                                background: "oklch(0.99 0 0)",
+                                color: "oklch(0.06 0 0)",
                               }
                             : {
                                 background: "transparent",
@@ -5711,7 +5732,13 @@ export default function App() {
               Array.isArray((data as any).customSections) &&
               (data as any).customSections.length > 0
             ) {
-              setCustomSections((data as any).customSections);
+              // Merge with defaults so gym-tshirt and baggy-pants always exist
+              const loaded = (data as any).customSections as ProductSection[];
+              const existingIds = loaded.map((s: ProductSection) => s.id);
+              const missing = DEFAULT_SECTIONS.filter(
+                (ds) => !existingIds.includes(ds.id),
+              );
+              setCustomSections([...loaded, ...missing]);
               sectionsLoadedFromMain = true;
             }
             if ((data as any).founderData) {
@@ -5730,7 +5757,12 @@ export default function App() {
           try {
             const secs = JSON.parse(sectionsStr) as ProductSection[];
             if (Array.isArray(secs) && secs.length > 0) {
-              setCustomSections(secs);
+              // Merge with default sections so gym-tshirt and baggy-pants always exist
+              const existingIds = secs.map((s: ProductSection) => s.id);
+              const missing = DEFAULT_SECTIONS.filter(
+                (ds) => !existingIds.includes(ds.id),
+              );
+              setCustomSections([...secs, ...missing]);
               sectionsLoadedFromMain = true;
             }
           } catch {}
@@ -5776,6 +5808,28 @@ export default function App() {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
     setMobileMenuOpen(false);
   };
+
+  // Hash-based section navigation: #baggy-pants, #gym-tshirt, etc.
+  useEffect(() => {
+    function handleHash() {
+      const hash = window.location.hash.replace("#", "");
+      if (!hash) return;
+      // Check if hash matches a section id
+      const sectionIds = ["gym-tshirt", "baggy-pants", "__all__", "__new__"];
+      const allSectionIds = [...sectionIds, ...customSections.map((s) => s.id)];
+      if (allSectionIds.includes(hash)) {
+        setActiveSection(hash);
+        setTimeout(() => {
+          document
+            .getElementById("products")
+            ?.scrollIntoView({ behavior: "smooth" });
+        }, 300);
+      }
+    }
+    handleHash();
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, [customSections]);
 
   const handleLogoClick = () => {
     scrollTo("home");
@@ -5883,7 +5937,7 @@ export default function App() {
                     <div
                       className="absolute top-full left-1/2 -translate-x-1/2 mt-2 min-w-[160px] rounded-xl border border-border/60 shadow-xl overflow-hidden opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50"
                       style={{
-                        backgroundColor: "oklch(0.09 0.008 60 / 0.97)",
+                        backgroundColor: "oklch(0.06 0 0 / 0.97)",
                         backdropFilter: "blur(16px)",
                       }}
                     >
@@ -5949,8 +6003,8 @@ export default function App() {
                   <div
                     className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold uppercase"
                     style={{
-                      background: "oklch(0.85 0.12 85)",
-                      color: "oklch(0.09 0.008 60)",
+                      background: "oklch(0.99 0 0)",
+                      color: "oklch(0.06 0 0)",
                     }}
                     title={googleUser.email}
                   >
@@ -5960,8 +6014,8 @@ export default function App() {
                     <span
                       className="text-xs font-bold px-1.5 py-0.5 rounded"
                       style={{
-                        background: "oklch(0.85 0.12 85 / 0.15)",
-                        color: "oklch(0.85 0.12 85)",
+                        background: "oklch(0.99 0 0 / 0.08)",
+                        color: "oklch(0.99 0 0)",
                       }}
                     >
                       Admin
@@ -6021,7 +6075,7 @@ export default function App() {
                 {totalItems > 0 && (
                   <span
                     className="absolute -top-1 -right-1 w-5 h-5 bg-brand-gold text-background text-xs font-bold rounded-full flex items-center justify-center"
-                    style={{ color: "oklch(0.09 0.008 60)" }}
+                    style={{ color: "oklch(0.06 0 0)" }}
                   >
                     {totalItems}
                   </span>
@@ -6164,9 +6218,9 @@ export default function App() {
             className="w-full text-center py-2 px-4 text-xs font-display font-bold tracking-[0.25em] uppercase"
             style={{
               background:
-                "linear-gradient(90deg, oklch(0.14 0.02 60) 0%, oklch(0.18 0.03 70) 50%, oklch(0.14 0.02 60) 100%)",
-              color: "oklch(0.85 0.12 85)",
-              borderTop: "1px solid oklch(0.3 0.05 75 / 0.4)",
+                "linear-gradient(90deg, oklch(0.1 0 0) 0%, oklch(0.14 0 0) 50%, oklch(0.1 0 0) 100%)",
+              color: "oklch(0.99 0 0)",
+              borderTop: "1px solid oklch(0.25 0 0 / 0.4)",
             }}
             data-ocid="nav.panel"
           >
@@ -6194,13 +6248,13 @@ export default function App() {
             className="absolute inset-0"
             style={{
               background:
-                "linear-gradient(to bottom, rgba(12,11,9,0.75) 0%, rgba(12,11,9,0.5) 50%, rgba(12,11,9,0.9) 100%)",
+                "linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0.9) 100%)",
             }}
           />
         </div>
         <div className="relative z-10 text-center px-4 max-w-5xl mx-auto">
           <p className="font-display text-xs uppercase tracking-[0.5em] text-brand-gold mb-4 animate-fade-in-up opacity-0">
-            Est. Premium Collection
+            FEEL THE STRENGTH
           </p>
           <h1
             className="font-display font-bold uppercase leading-none text-foreground animate-fade-in-up opacity-0 delay-200"
@@ -6217,14 +6271,14 @@ export default function App() {
             className="font-display font-medium tracking-[0.35em] text-foreground/75 animate-fade-in-up opacity-0 delay-400"
             style={{ fontSize: "clamp(0.8rem, 2vw, 1.2rem)" }}
           >
-            Feel the Strength
+            Premium Gym & Streetwear for the New Generation
           </p>
           <div className="mt-10 animate-fade-in-up opacity-0 delay-600">
             <button
               type="button"
               onClick={() => scrollTo("products")}
               data-ocid="hero.primary_button"
-              className="inline-flex items-center gap-3 px-10 py-4 btn-gold font-display font-bold uppercase tracking-[0.2em] text-sm rounded-full shadow-gold-glow"
+              className="inline-flex items-center gap-3 px-12 py-4 btn-gold font-display font-bold uppercase tracking-[0.25em] text-sm shadow-gold-glow"
             >
               Shop Now <ChevronDown size={15} />
             </button>
@@ -6235,13 +6289,35 @@ export default function App() {
         </div>
       </section>
 
+      {/* TRUST BAR */}
+      <section
+        className="py-3 px-4 border-y border-border/40"
+        style={{ backgroundColor: "oklch(0.1 0 0)" }}
+      >
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-10">
+            <span className="font-display font-bold text-xs uppercase tracking-[0.2em] text-foreground/80">
+              🚚 Free Delivery Available
+            </span>
+            <span className="hidden sm:block w-px h-4 bg-border/60" />
+            <span className="font-display font-bold text-xs uppercase tracking-[0.2em] text-foreground/80">
+              🔥 Limited Drop – Few Pieces Only
+            </span>
+            <span className="hidden sm:block w-px h-4 bg-border/60" />
+            <span className="font-display font-bold text-xs uppercase tracking-[0.2em] text-foreground/80">
+              ⭐ Premium Quality Streetwear
+            </span>
+          </div>
+        </div>
+      </section>
+
       {/* STICKY SECTION BAR */}
       {
         <div
           className="sticky z-30 w-full border-b border-border/60"
           style={{
             top: 65,
-            backgroundColor: "oklch(0.09 0.008 60 / 0.97)",
+            backgroundColor: "oklch(0.06 0 0 / 0.97)",
             backdropFilter: "blur(12px)",
           }}
         >
@@ -6341,31 +6417,171 @@ export default function App() {
           );
         })()}
       </section>
-      {/* STATEMENT BAND */}
-      <section className="relative overflow-hidden py-20">
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(135deg, oklch(0.09 0.008 60) 0%, oklch(0.14 0.015 75) 50%, oklch(0.09 0.008 60) 100%)",
-          }}
-        />
-        <div className="relative z-10 px-8 md:px-16 max-w-7xl mx-auto">
-          <h2
-            className="font-display font-bold uppercase leading-none text-foreground/90"
-            style={{
-              fontSize: "clamp(2.5rem, 10vw, 7rem)",
-              letterSpacing: "-0.02em",
-            }}
+      {/* WHY ROCHER */}
+      <section
+        className="py-24 px-4"
+        style={{ backgroundColor: "oklch(0.06 0 0)" }}
+      >
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2
+              className="font-display font-black uppercase text-foreground"
+              style={{
+                fontSize: "clamp(2.5rem, 8vw, 5rem)",
+                letterSpacing: "-0.02em",
+              }}
+            >
+              WHY ROCHER?
+            </h2>
+            <div className="gold-divider max-w-xs mx-auto mt-5" />
+          </div>
+          <div
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-px"
+            style={{ backgroundColor: "oklch(0.2 0 0)" }}
           >
-            Built for
-            <br />
-            <span className="text-brand-gold">Champions</span>
-          </h2>
+            {[
+              { label: "Built for strength", icon: "💪" },
+              { label: "Designed for confidence", icon: "🔥" },
+              { label: "Made for modern streetwear", icon: "🖤" },
+              {
+                label: "ROCHER is not just clothing — it's a mindset.",
+                icon: "⚡",
+              },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="p-10 flex flex-col gap-4"
+                style={{ backgroundColor: "oklch(0.06 0 0)" }}
+              >
+                <span className="text-3xl">{item.icon}</span>
+                <p className="font-display font-bold text-foreground text-lg leading-snug">
+                  {item.label}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* CONTACT */}
+      {/* PRODUCT HIGHLIGHTS BAR */}
+      <section
+        className="py-14 px-4 border-y border-border/40"
+        style={{ backgroundColor: "oklch(0.1 0 0)" }}
+      >
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+            {[
+              { icon: "💪", label: "Compression Fit" },
+              { icon: "🌬️", label: "Breathable Fabric" },
+              { icon: "🖤", label: "Streetwear Aesthetic" },
+              { icon: "☀️", label: "Summer Ready" },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="flex flex-col items-center gap-3"
+              >
+                <span className="text-3xl">{item.icon}</span>
+                <p className="font-display font-bold text-foreground text-sm uppercase tracking-widest">
+                  {item.label}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* LIMITED DROP URGENCY */}
+      <section
+        className="py-28 px-4 relative overflow-hidden"
+        style={{ backgroundColor: "oklch(0.06 0 0)" }}
+      >
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(ellipse 80% 60% at 50% 0%, oklch(0.2 0 0 / 0.7), transparent)",
+          }}
+        />
+        <div className="relative z-10 max-w-3xl mx-auto text-center">
+          <p className="font-display font-black text-xs uppercase tracking-[0.5em] text-muted-foreground mb-4">
+            Exclusive Release
+          </p>
+          <h2
+            className="font-display font-black uppercase text-foreground mb-6"
+            style={{
+              fontSize: "clamp(3rem, 12vw, 8rem)",
+              letterSpacing: "-0.03em",
+              lineHeight: "0.9",
+            }}
+          >
+            LIMITED
+            <br />
+            DROP
+          </h2>
+          <p className="text-muted-foreground text-base mb-10 font-display max-w-md mx-auto">
+            Only a few pieces available. Once sold out, it&apos;s gone.
+          </p>
+          <button
+            type="button"
+            onClick={() => scrollTo("products")}
+            data-ocid="urgency.primary_button"
+            className="inline-flex items-center gap-3 px-12 py-4 btn-gold font-display font-black uppercase tracking-[0.25em] text-sm"
+          >
+            GET YOURS NOW
+          </button>
+        </div>
+      </section>
+
+      {/* BRAND STORY */}
+      <section
+        className="py-28 px-4"
+        style={{ backgroundColor: "oklch(0.08 0 0)" }}
+      >
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="gold-divider max-w-xs mx-auto mb-14" />
+          <blockquote
+            className="font-display font-bold text-foreground leading-snug"
+            style={{
+              fontSize: "clamp(1.4rem, 4vw, 2.5rem)",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            &ldquo;ROCHER was built to represent strength, confidence, and
+            individuality. This is more than fashion &mdash; this is
+            identity.&rdquo;
+          </blockquote>
+          <div className="gold-divider max-w-xs mx-auto mt-14" />
+        </div>
+      </section>
+
+      {/* SOCIAL PROOF */}
+      <section
+        className="py-20 px-4 border-y border-border/40"
+        style={{ backgroundColor: "oklch(0.06 0 0)", overflow: "hidden" }}
+      >
+        <div className="flex animate-marquee whitespace-nowrap gap-16">
+          {[
+            { text: "Be the first to wear ROCHER.", id: "r1" },
+            { text: "Join the movement.", id: "j1" },
+            { text: "Gen-Z Streetwear.", id: "g1" },
+            { text: "Built for Champions.", id: "b1" },
+            { text: "Limited Drops Only.", id: "l1" },
+            { text: "Be the first to wear ROCHER.", id: "r2" },
+            { text: "Join the movement.", id: "j2" },
+            { text: "Gen-Z Streetwear.", id: "g2" },
+            { text: "Built for Champions.", id: "b2" },
+            { text: "Limited Drops Only.", id: "l2" },
+          ].map(({ text, id }) => (
+            <span
+              key={id}
+              className="font-display font-black uppercase text-foreground/20 text-4xl md:text-6xl tracking-tight flex-shrink-0"
+            >
+              {text}&nbsp;&nbsp;
+            </span>
+          ))}
+        </div>
+      </section>
+
       <section id="contact" className="py-24 px-4">
         <div className="max-w-2xl mx-auto text-center">
           <p className="font-display text-xs uppercase tracking-[0.45em] text-brand-gold mb-3">
@@ -6404,7 +6620,7 @@ export default function App() {
       {/* FOUNDER'S NOTE */}
       <section
         className="py-20 px-4"
-        style={{ backgroundColor: "oklch(0.05 0.004 60)" }}
+        style={{ backgroundColor: "oklch(0.05 0 0)" }}
       >
         <div className="max-w-2xl mx-auto text-center">
           <p className="font-display text-xs uppercase tracking-[0.3em] text-brand-gold mb-8">
@@ -6416,15 +6632,15 @@ export default function App() {
                 src={founderData.photo}
                 alt={founderData.name}
                 className="w-24 h-24 rounded-full object-cover border-2"
-                style={{ borderColor: "oklch(0.85 0.12 85 / 0.4)" }}
+                style={{ borderColor: "oklch(0.99 0 0 / 0.25)" }}
               />
             </div>
           )}
           <div
             className="space-y-4 text-sm leading-relaxed"
             style={{
-              color: "oklch(0.75 0.02 60)",
-              fontFamily: "'Playfair Display', serif",
+              color: "oklch(0.65 0 0)",
+              fontFamily: "'Bricolage Grotesque', sans-serif",
             }}
           >
             <p style={{ whiteSpace: "pre-line" }}>{founderData.note}</p>
@@ -6435,7 +6651,7 @@ export default function App() {
             </p>
             <p
               className="text-xs tracking-[0.2em] uppercase mt-1"
-              style={{ color: "oklch(0.6 0.02 60)" }}
+              style={{ color: "oklch(0.5 0 0)" }}
             >
               {founderData.title}
             </p>
@@ -6445,7 +6661,7 @@ export default function App() {
 
       <footer
         className="border-t border-border py-10 px-4"
-        style={{ backgroundColor: "oklch(0.07 0.006 60)" }}
+        style={{ backgroundColor: "oklch(0.06 0 0)" }}
       >
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
@@ -6527,7 +6743,7 @@ export default function App() {
             </button>
             <div className="p-6">
               <div className="flex items-center gap-3 mb-1">
-                <Package size={20} style={{ color: "oklch(0.85 0.12 85)" }} />
+                <Package size={20} style={{ color: "oklch(0.99 0 0)" }} />
                 <h2 className="font-display text-2xl font-bold text-brand-gold tracking-wide">
                   My Orders
                 </h2>
@@ -6596,7 +6812,7 @@ export default function App() {
                                 </span>
                                 <span
                                   className="text-xs bg-border/30 px-2 py-0.5 rounded"
-                                  style={{ color: "oklch(0.85 0.12 85)" }}
+                                  style={{ color: "oklch(0.99 0 0)" }}
                                 >
                                   ₹{order.price}
                                 </span>
@@ -6681,7 +6897,7 @@ export default function App() {
                                     color:
                                       order.upiPaymentStatus === "verified"
                                         ? "oklch(0.7 0.15 145)"
-                                        : "oklch(0.85 0.12 85)",
+                                        : "oklch(0.99 0 0)",
                                   }}
                                   className="font-bold"
                                 >
@@ -6734,13 +6950,12 @@ export default function App() {
                                         style={
                                           i <= currentStep
                                             ? {
-                                                background:
-                                                  "oklch(0.85 0.12 85)",
-                                                color: "oklch(0.09 0.008 60)",
+                                                background: "oklch(0.99 0 0)",
+                                                color: "oklch(0.06 0 0)",
                                               }
                                             : {
                                                 background: "transparent",
-                                                color: "oklch(0.5 0.02 60)",
+                                                color: "oklch(0.5 0 0)",
                                               }
                                         }
                                       >
@@ -6830,14 +7045,14 @@ export default function App() {
         >
           <div className="w-full max-w-2xl mx-auto px-4 pt-16 pb-8">
             <div className="flex items-center gap-3 mb-2">
-              <Search size={22} style={{ color: "oklch(0.85 0.12 85)" }} />
+              <Search size={22} style={{ color: "oklch(0.99 0 0)" }} />
               <input
                 type="text"
                 placeholder="Search products, styles, descriptions..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="flex-1 bg-transparent font-display text-xl text-foreground outline-none placeholder:text-muted-foreground"
-                style={{ caretColor: "oklch(0.85 0.12 85)" }}
+                style={{ caretColor: "oklch(0.99 0 0)" }}
               />
               <button
                 type="button"
@@ -6848,7 +7063,7 @@ export default function App() {
               </button>
             </div>
             <div
-              style={{ height: "1px", background: "oklch(0.85 0.12 85 / 0.3)" }}
+              style={{ height: "1px", background: "oklch(0.99 0 0 / 0.2)" }}
               className="mb-4"
             />
             {/* Price range filter */}
@@ -6947,7 +7162,7 @@ export default function App() {
                   <div>
                     <p
                       className="text-xs uppercase tracking-widest font-display mb-4"
-                      style={{ color: "oklch(0.85 0.12 85)" }}
+                      style={{ color: "oklch(0.99 0 0)" }}
                     >
                       {scored.length} result{scored.length !== 1 ? "s" : ""}{" "}
                       found
@@ -6989,7 +7204,7 @@ export default function App() {
                               <div className="flex items-center gap-2 mt-1.5">
                                 <span
                                   className="font-bold text-sm"
-                                  style={{ color: "oklch(0.85 0.12 85)" }}
+                                  style={{ color: "oklch(0.99 0 0)" }}
                                 >
                                   ₹{discountedPrice}
                                 </span>
@@ -7002,8 +7217,8 @@ export default function App() {
                                   <span
                                     className="text-xs px-1.5 py-0.5 rounded"
                                     style={{
-                                      background: "oklch(0.85 0.12 85 / 0.15)",
-                                      color: "oklch(0.85 0.12 85)",
+                                      background: "oklch(0.99 0 0 / 0.08)",
+                                      color: "oklch(0.99 0 0)",
                                     }}
                                   >
                                     Best Seller

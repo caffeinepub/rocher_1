@@ -14,8 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ['Playfair Display', 'Georgia', 'serif'],
-        body: ['Satoshi', 'sans-serif'],
+        display: ['Bricolage Grotesque', 'Inter', 'sans-serif'],
+        body: ['Satoshi', 'Inter', 'sans-serif'],
       },
       colors: {
         border: "oklch(var(--border))",
@@ -84,7 +84,7 @@ export default {
         xs: "0 1px 2px 0 rgba(0,0,0,0.05)",
         card: "0 4px 24px rgba(0,0,0,0.22)",
         "card-hover": "0 8px 40px rgba(0,0,0,0.32)",
-        "gold-glow": "0 0 20px oklch(0.78 0.12 85 / 0.35), 0 4px 16px rgba(0,0,0,0.3)",
+        "gold-glow": "0 0 20px oklch(0.99 0 0 / 0.15), 0 4px 16px rgba(0,0,0,0.5)",
       },
       keyframes: {
         "accordion-down": {
@@ -95,10 +95,15 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        marquee: {
+          from: { transform: "translateX(0)" },
+          to: { transform: "translateX(-50%)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "marquee": "marquee 20s linear infinite",
       },
     },
   },

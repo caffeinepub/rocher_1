@@ -1,42 +1,44 @@
-# ROCHER E-Commerce
+# ROCHER
 
 ## Current State
-- Full e-commerce landing page in App.tsx (single component file, ~2800 lines)
-- Products, sale settings, promo codes, payment methods all stored in localStorage
-- Admin panel accessible via logo 5x click + password `rocher2024`
-- Cart system with add-to-cart and Instagram-based ordering
-- Product detail modals, sale banners, hero section
+Full-featured e-commerce landing page with luxury cream/gold theme (near-black background, cream text, gold accents, Playfair Display font). All features: admin panel, UPI payments, multi-method login, product sections, order management, AI search, SEO, photo gallery, activity log, etc. Single-file React app (App.tsx) with internal CSS in index.css.
 
 ## Requested Changes (Diff)
 
 ### Add
-- **Direct Buy button** on each product card ("Buy Now" style, opens checkout immediately with that product)
-- **Checkout Modal** with:
-  - Delivery address form (name, phone, address line 1, address line 2, city, state, pincode)
-  - Payment method selector (from admin-configured methods)
-  - Promo code input with apply button
-  - Order summary (product, size, qty, price, discount if promo applied)
-  - Place Order button (sends order summary to Instagram DM)
-- **Backend persistence** for admin settings using Motoko canister:
-  - Products list
-  - Sale settings
-  - Promo codes
-  - Payment methods
-  - Banner image URL
-  - Background color
-- **New banner image** set to: `/assets/uploads/rocher-banner-019d2803-de4c-7516-938d-f7ddc535d35e-1.jpg`
+- Hero section: Large bold heading "ROCHER – FEEL THE STRENGTH", subheading "Premium Gym & Streetwear for the New Generation", CTA button "SHOP NOW"
+- Trust bar: "Free Delivery Available" | "Limited Drop – Few Pieces Only" | "Premium Quality Streetwear"
+- Why Rocher section with the four pillars of brand identity
+- Product highlights bar: Compression Fit | Breathable Fabric | Streetwear Aesthetic | Summer Ready
+- Urgency/Limited Drop section with "GET YOURS NOW" CTA
+- Brand story section
+- Social proof tagline section
+- Discounted pricing display format: ₹999 → ₹699 (LIMITED OFFER)
 
 ### Modify
-- Admin panel save function: saves to backend canister instead of (or in addition to) localStorage
-- Load functions: load from backend canister on startup, fall back to localStorage
-- Banner constant: updated to new uploaded banner image
+- **Complete theme overhaul**: Replace cream/gold luxury palette with Gen-Z black/white streetwear palette
+  - Background: pure black (#000000)
+  - Primary text: clean white (#FFFFFF)
+  - Accent: sharp white or electric accent (no gold)
+  - Font: Switch to bold modern sans-serif (e.g. system or Google Sans, keep Playfair only if user wants)
+  - Buttons: white background, black text (inverted high-contrast)
+  - Cards: dark gray (#111111 or #0a0a0a)
+  - Remove gold color variables, replace with white/gray contrast
+- Homepage sections reordered to match requested structure: Hero → Trust Bar → Trending Products → Why Rocher → Product Highlights → Limited Drop → Brand Story → Social Proof → Footer
+- Product cards to show discounted pricing format
+- Footer with Instagram link, contact, about
 
 ### Remove
-- Nothing removed
+- Gold/cream color variables from CSS
+- Playfair Display font (replace with bold modern sans-serif)
 
 ## Implementation Plan
-1. Generate Motoko backend with stable storage for: products, sale settings, promo codes, payment methods, banner URL, background color
-2. Frontend: Add `DirectBuyButton` on product cards
-3. Frontend: Add `CheckoutModal` component with address form, payment selector, promo input
-4. Frontend: Wire admin save/load to backend canister
-5. Frontend: Update BANNER constant to new uploaded image
+1. Update index.css: replace all CSS custom properties — background to #000, text to #fff, accent to white/gray, remove gold. Add new bold sans-serif font stack.
+2. Update App.tsx: restructure the visible homepage sections to match the requested layout above the fold.
+3. Use existing uploaded product images throughout:
+   - T-shirt: /assets/uploads/rocher-tshirt-front-019d2487-1aae-72cf-be47-9d1b16657d9b-3.jpg
+   - T-shirt Back: /assets/uploads/rocher-tshirt-back-019d2487-184a-74e6-8aa3-064541c0ea63-2.jpg
+   - Baggy Pants: /assets/uploads/rocher-pants-019d2487-1736-7709-b86b-513acfef4591-1.jpg
+   - Logo: /assets/uploads/rocher_original_logo-019d3a32-1c8a-762b-93e3-31ff13ea8fd4-1.png
+   - Banner: /assets/uploads/rocher-banner-019d2803-de4c-7516-938d-f7ddc535d35e-1.jpg
+4. Keep ALL existing features intact: admin panel, UPI payment, login, orders, sections, search, SEO, photo gallery, etc.

@@ -180,9 +180,7 @@ export async function createActorWithConfig(
 
 export async function createStorageClientWithConfig(): Promise<StorageClient> {
   const config = await loadConfig();
-  const agent = new HttpAgent({
-    host: config.backend_host,
-  });
+  const agent = new HttpAgent({ host: config.backend_host });
   if (config.backend_host?.includes("localhost")) {
     await agent.fetchRootKey().catch(() => {});
   }
