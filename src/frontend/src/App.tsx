@@ -4066,6 +4066,47 @@ function AdminPanel({
                         ★ Mark as Best Seller
                       </label>
                     </div>
+                    {/* Image management */}
+                    <div className="sm:col-span-2 mt-2">
+                      <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-2">
+                        Product Photos
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        {(p.images.length > 0 ? p.images : [""]).map(
+                          (url, imgIdx) => (
+                            <ImageUrlField
+                              key={`${p.id}-img-${imgIdx}`}
+                              value={url}
+                              onChange={(v) => {
+                                const imgs = [...p.images];
+                                imgs[imgIdx] = v;
+                                update(p.id, "images", imgs);
+                              }}
+                              onRemove={() => {
+                                const imgs = p.images.filter(
+                                  (_, i) => i !== imgIdx,
+                                );
+                                update(
+                                  p.id,
+                                  "images",
+                                  imgs.length ? imgs : [""],
+                                );
+                              }}
+                              showRemove={p.images.length > 1}
+                            />
+                          ),
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          update(p.id, "images", [...p.images, ""])
+                        }
+                        className="mt-2 flex items-center gap-1.5 text-xs font-bold text-brand-gold hover:text-brand-gold/70 transition-colors"
+                      >
+                        <Plus size={12} /> Add Photo
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -5714,38 +5755,49 @@ export default function App() {
         </div>
       </section>
 
+      {/* STICKY SECTION BAR */}
+      {customSections.length > 0 && (
+        <div
+          className="sticky z-30 w-full border-b border-border/60"
+          style={{
+            top: 65,
+            backgroundColor: "oklch(0.09 0.008 60 / 0.97)",
+            backdropFilter: "blur(12px)",
+          }}
+        >
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex gap-2 overflow-x-auto py-3 scrollbar-hide">
+              <button
+                type="button"
+                onClick={() => setActiveSection("__all__")}
+                className={`flex-shrink-0 px-4 py-1.5 font-display font-bold text-xs uppercase tracking-widest rounded-full border transition-all ${activeSection === "__all__" ? "btn-gold border-transparent" : "btn-outline-gold bg-background/60"}`}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSection("__new__")}
+                className={`flex-shrink-0 px-4 py-1.5 font-display font-bold text-xs uppercase tracking-widest rounded-full border transition-all ${activeSection === "__new__" ? "btn-gold border-transparent" : "btn-outline-gold bg-background/60"}`}
+              >
+                New Arrivals
+              </button>
+              {customSections.map((sec) => (
+                <button
+                  key={sec.id}
+                  type="button"
+                  onClick={() => setActiveSection(sec.id)}
+                  className={`flex-shrink-0 px-4 py-1.5 font-display font-bold text-xs uppercase tracking-widest rounded-full border transition-all ${activeSection === sec.id ? "btn-gold border-transparent" : "btn-outline-gold bg-background/60"}`}
+                >
+                  {sec.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* PRODUCTS */}
       <section id="products" className="py-24 px-4 max-w-7xl mx-auto">
-        {/* Section tabs */}
-        {customSections.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-2 mb-10 scrollbar-hide -mx-4 px-4 sm:flex-wrap sm:overflow-x-visible sm:mx-0 sm:px-0">
-            <button
-              type="button"
-              onClick={() => setActiveSection("__all__")}
-              className={`flex-shrink-0 px-5 py-2 font-display font-bold text-xs uppercase tracking-widest rounded-full border transition-all ${activeSection === "__all__" ? "btn-gold border-transparent" : "btn-outline-gold bg-background/60"}`}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSection("__new__")}
-              className={`flex-shrink-0 px-5 py-2 font-display font-bold text-xs uppercase tracking-widest rounded-full border transition-all ${activeSection === "__new__" ? "btn-gold border-transparent" : "btn-outline-gold bg-background/60"}`}
-            >
-              New Arrivals
-            </button>
-            {customSections.map((sec) => (
-              <button
-                key={sec.id}
-                type="button"
-                onClick={() => setActiveSection(sec.id)}
-                className={`flex-shrink-0 px-5 py-2 font-display font-bold text-xs uppercase tracking-widest rounded-full border transition-all ${activeSection === sec.id ? "btn-gold border-transparent" : "btn-outline-gold bg-background/60"}`}
-              >
-                {sec.title}
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* Section heading */}
         {(() => {
           const sec = customSections.find((s) => s.id === activeSection);
