@@ -230,3 +230,12 @@
     box-shadow: 0 0 10px oklch(0.78 0.12 85 / 0.2);
   }
 }
+
+/* Scrollbar hide utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

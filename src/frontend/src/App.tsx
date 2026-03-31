@@ -1044,7 +1044,7 @@ function CheckoutModal({
     return (
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
         <div className="absolute inset-0 bg-black/85 backdrop-blur-md" />
-        <div className="relative z-10 bg-card rounded-xl w-full max-w-md p-7 shadow-2xl border border-brand-gold/30 animate-fade-in-up">
+        <div className="relative z-10 bg-card rounded-t-2xl sm:rounded-xl w-full sm:max-w-md p-6 sm:p-7 shadow-2xl border border-brand-gold/30 animate-fade-in-up overflow-y-auto max-h-[95vh]">
           <div className="flex items-center gap-3 mb-4">
             <span className="text-3xl">💳</span>
             <div>
@@ -1403,7 +1403,7 @@ function CheckoutModal({
                 <p className="text-xs font-bold uppercase tracking-widest text-brand-gold mb-3">
                   Choose UPI App
                 </p>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {UPI_APPS.map((app) => (
                     <button
                       key={app.id}
@@ -5718,18 +5718,18 @@ export default function App() {
       <section id="products" className="py-24 px-4 max-w-7xl mx-auto">
         {/* Section tabs */}
         {customSections.length > 0 && (
-          <div className="flex gap-2 flex-wrap mb-10">
+          <div className="flex gap-2 overflow-x-auto pb-2 mb-10 scrollbar-hide -mx-4 px-4 sm:flex-wrap sm:overflow-x-visible sm:mx-0 sm:px-0">
             <button
               type="button"
               onClick={() => setActiveSection("__all__")}
-              className={`px-5 py-2 font-display font-bold text-xs uppercase tracking-widest rounded-full border transition-all ${activeSection === "__all__" ? "btn-gold border-transparent" : "btn-outline-gold bg-background/60"}`}
+              className={`flex-shrink-0 px-5 py-2 font-display font-bold text-xs uppercase tracking-widest rounded-full border transition-all ${activeSection === "__all__" ? "btn-gold border-transparent" : "btn-outline-gold bg-background/60"}`}
             >
               All
             </button>
             <button
               type="button"
               onClick={() => setActiveSection("__new__")}
-              className={`px-5 py-2 font-display font-bold text-xs uppercase tracking-widest rounded-full border transition-all ${activeSection === "__new__" ? "btn-gold border-transparent" : "btn-outline-gold bg-background/60"}`}
+              className={`flex-shrink-0 px-5 py-2 font-display font-bold text-xs uppercase tracking-widest rounded-full border transition-all ${activeSection === "__new__" ? "btn-gold border-transparent" : "btn-outline-gold bg-background/60"}`}
             >
               New Arrivals
             </button>
@@ -5738,7 +5738,7 @@ export default function App() {
                 key={sec.id}
                 type="button"
                 onClick={() => setActiveSection(sec.id)}
-                className={`px-5 py-2 font-display font-bold text-xs uppercase tracking-widest rounded-full border transition-all ${activeSection === sec.id ? "btn-gold border-transparent" : "btn-outline-gold bg-background/60"}`}
+                className={`flex-shrink-0 px-5 py-2 font-display font-bold text-xs uppercase tracking-widest rounded-full border transition-all ${activeSection === sec.id ? "btn-gold border-transparent" : "btn-outline-gold bg-background/60"}`}
               >
                 {sec.title}
               </button>
