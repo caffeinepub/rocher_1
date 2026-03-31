@@ -317,6 +317,8 @@ function loadProducts(): Product[] {
         ...def,
         name: saved.name ?? def.name,
         price: saved.price ?? def.price,
+        images:
+          saved.images && saved.images.length > 0 ? saved.images : def.images,
         description: saved.description ?? def.description,
         stock: saved.stock ?? def.stock,
         bestSeller: saved.bestSeller ?? def.bestSeller,
@@ -534,18 +536,120 @@ function ProductModal({
   const [imgIndex, setImgIndex] = useState(0);
   const [size, setSize] = useState("");
   const [sizeError, setSizeError] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+  const touchStartRef = useRef<{ x: number; y: number; dist: number } | null>(
+    null,
+  );
+  const isDraggingRef = useRef(false);
+
+  const resetZoom = () => {
+    setZoom(1);
+    setPanX(0);
+    setPanY(0);
+  };
+
+  const changeImg = (newIdx: number) => {
+    setImgIndex(newIdx);
+    resetZoom();
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      touchStartRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        dist: 0,
+      };
+      isDraggingRef.current = false;
+    } else if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      touchStartRef.current = {
+        x: 0,
+        y: 0,
+        dist: Math.sqrt(dx * dx + dy * dy),
+      };
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && touchStartRef.current) {
+      e.preventDefault();
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const scale = dist / (touchStartRef.current.dist || dist);
+      setZoom((prev) => Math.min(4, Math.max(1, prev * scale)));
+      touchStartRef.current = { ...touchStartRef.current, dist };
+    } else if (e.touches.length === 1 && touchStartRef.current && zoom > 1) {
+      const movX = e.touches[0].clientX - touchStartRef.current.x;
+      const movY = e.touches[0].clientY - touchStartRef.current.y;
+      setPanX((prev) => prev + movX);
+      setPanY((prev) => prev + movY);
+      touchStartRef.current = {
+        ...touchStartRef.current,
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+      };
+      isDraggingRef.current = true;
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (
+      !isDraggingRef.current &&
+      e.changedTouches.length === 1 &&
+      touchStartRef.current &&
+      zoom === 1
+    ) {
+      const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+      if (Math.abs(dx) > 50) {
+        if (dx < 0) changeImg((imgIndex + 1) % product.images.length);
+        else
+          changeImg(
+            (imgIndex - 1 + product.images.length) % product.images.length,
+          );
+      }
+    }
+    if (zoom <= 1) resetZoom();
+    touchStartRef.current = null;
+    isDraggingRef.current = false;
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 1.1 : 0.9;
+    setZoom((prev) => Math.min(4, Math.max(1, prev * delta)));
+  };
 
   const discountedPrice = sale.enabled
     ? salePrice(product.price, sale.discount)
     : null;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: setters are stable
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
+      if (e.key === "ArrowRight") {
+        setImgIndex((prev) => (prev + 1) % product.images.length);
+        setZoom(1);
+        setPanX(0);
+        setPanY(0);
+      }
+      if (e.key === "ArrowLeft") {
+        setImgIndex(
+          (prev) => (prev - 1 + product.images.length) % product.images.length,
+        );
+        setZoom(1);
+        setPanX(0);
+        setPanY(0);
+      }
     };
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
-  }, [onClose]);
+  }, [onClose, product.images.length]);
 
   const handleAdd = () => {
     if (!size) {
@@ -591,43 +695,127 @@ function ProductModal({
 
         <div className="grid md:grid-cols-2">
           {/* Image side */}
-          <div className="relative bg-muted" style={{ minHeight: "420px" }}>
-            {product.bestSeller && (
-              <div className="best-seller-ribbon">★ Best Seller</div>
-            )}
-            {sale.enabled && (
+          <div className="flex flex-col bg-muted">
+            {/* Main image viewer */}
+            <div
+              className="relative overflow-hidden"
+              style={{
+                height: "clamp(260px, 55vw, 500px)",
+                cursor: zoom > 1 ? "grab" : "default",
+              }}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onWheel={handleWheel}
+            >
+              {product.bestSeller && (
+                <div className="best-seller-ribbon">★ Best Seller</div>
+              )}
+              {sale.enabled && (
+                <div
+                  className="best-seller-ribbon"
+                  style={{
+                    background: "oklch(0.45 0.2 25)",
+                    top: product.bestSeller ? "48px" : "12px",
+                  }}
+                >
+                  🔥 -{sale.discount}%
+                </div>
+              )}
               <div
-                className="best-seller-ribbon"
                 style={{
-                  background: "oklch(0.45 0.2 25)",
-                  top: product.bestSeller ? "48px" : "12px",
+                  transform: `scale(${zoom}) translate(${panX / zoom}px, ${panY / zoom}px)`,
+                  transformOrigin: "center center",
+                  transition: zoom === 1 ? "transform 0.2s ease" : "none",
+                  width: "100%",
+                  height: "100%",
                 }}
               >
-                🔥 -{sale.discount}%
+                <ImageFallback
+                  src={product.images[imgIndex]}
+                  alt={product.name}
+                  className="w-full h-full object-cover"
+                />
               </div>
-            )}
-            <ImageFallback
-              src={product.images[imgIndex]}
-              alt={product.name}
-              className="w-full h-full object-cover"
-            />
+              {zoom > 1 && (
+                <button
+                  type="button"
+                  onClick={resetZoom}
+                  className="absolute top-14 right-3 z-20 bg-background/80 text-foreground text-xs px-2 py-1 rounded-full hover:text-brand-gold transition-colors"
+                >
+                  Reset zoom
+                </button>
+              )}
+              {product.images.length > 1 && zoom === 1 && (
+                <>
+                  <div className="absolute top-1/2 left-2 -translate-y-1/2 text-foreground/40 text-xs pointer-events-none select-none">
+                    ‹ swipe
+                  </div>
+                  <div className="absolute bottom-2 right-3 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full font-display">
+                    {imgIndex + 1}/{product.images.length}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Thumbnail strip — always visible below the image on mobile */}
             {product.images.length > 1 && (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-                {["Front", "Back"].map((label, i) => (
-                  <button
-                    type="button"
-                    key={label}
-                    onClick={() => setImgIndex(i)}
-                    data-ocid="product.toggle"
-                    className={`px-4 py-1.5 text-xs font-display tracking-wider rounded-full border transition-all ${
-                      imgIndex === i
-                        ? "btn-gold border-transparent"
-                        : "btn-outline-gold"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+              <div className="px-3 py-2.5 border-t border-border/40 bg-muted/80">
+                {product.images.length <= 3 ? (
+                  <div className="flex justify-center gap-2">
+                    {product.images.map((img2, i) => (
+                      <button
+                        type="button"
+                        key={img2 || i}
+                        onClick={() => changeImg(i)}
+                        data-ocid="product.toggle"
+                        className={`px-3 py-1 text-xs font-display tracking-wider rounded-full border transition-all ${imgIndex === i ? "btn-gold border-transparent" : "btn-outline-gold"}`}
+                      >
+                        {i === 0 ? "Front" : i === 1 ? "Back" : `View ${i + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        changeImg(
+                          (imgIndex - 1 + product.images.length) %
+                            product.images.length,
+                        )
+                      }
+                      className="w-9 h-9 rounded-full bg-background/80 flex items-center justify-center text-foreground hover:text-brand-gold transition-colors text-xl font-bold flex-shrink-0 border border-border/40"
+                    >
+                      &#8249;
+                    </button>
+                    <div className="flex gap-2 overflow-x-auto py-0.5 flex-1 scrollbar-hide">
+                      {product.images.map((img, i) => (
+                        <button
+                          type="button"
+                          key={img || i}
+                          onClick={() => changeImg(i)}
+                          className={`flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden border-2 transition-all ${imgIndex === i ? "border-brand-gold scale-105" : "border-transparent opacity-60 hover:opacity-90"}`}
+                        >
+                          <img
+                            src={img}
+                            alt={`View ${i + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        changeImg((imgIndex + 1) % product.images.length)
+                      }
+                      className="w-9 h-9 rounded-full bg-background/80 flex items-center justify-center text-foreground hover:text-brand-gold transition-colors text-xl font-bold flex-shrink-0 border border-border/40"
+                    >
+                      &#8250;
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2769,6 +2957,7 @@ function AdminPanel({
         ...def,
         name: e.name,
         price: e.price,
+        images: e.images && e.images.length > 0 ? e.images : def.images,
         description: e.description,
         stock: e.stock,
         bestSeller: e.bestSeller,
@@ -4838,21 +5027,28 @@ function ProductCard({
         )}
         {product.images.length > 1 && (
           <div
-            className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2"
+            className="absolute bottom-3 left-0 right-0 px-3 flex items-center justify-center gap-1.5 flex-wrap"
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
           >
-            {["Front", "Back"].map((label, i) => (
-              <button
-                type="button"
-                key={label}
-                onClick={() => setImgIndex(i)}
-                data-ocid="products.toggle"
-                className={`px-3 py-1 text-xs font-display tracking-wider rounded-full border transition-all ${imgIndex === i ? "btn-gold border-transparent" : "btn-outline-gold bg-background/60"}`}
-              >
-                {label}
-              </button>
-            ))}
+            {product.images
+              .slice(0, 5)
+              .map((prodImg, i) => (
+                <button
+                  type="button"
+                  key={prodImg || i}
+                  onClick={() => setImgIndex(i)}
+                  data-ocid="products.toggle"
+                  className={`px-3 py-1 text-xs font-display tracking-wider rounded-full border transition-all ${imgIndex === i ? "btn-gold border-transparent" : "btn-outline-gold bg-background/60"}`}
+                >
+                  {i === 0
+                    ? "Front"
+                    : i === 1
+                      ? "Back"
+                      : `+${product.images.length - 2} more`}
+                </button>
+              ))
+              .filter((_, i) => i < 3)}
           </div>
         )}
         <div className="absolute inset-0 bg-foreground/0 group-hover:bg-foreground/5 transition-colors pointer-events-none" />
