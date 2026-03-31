@@ -132,6 +132,8 @@ interface Order {
   locationCoords?: string;
   viaInstagram: boolean;
   userEmail?: string;
+  upiTransactionId?: string;
+  upiPaymentStatus?: "pending" | "submitted" | "verified";
 }
 
 interface ActivityLog {
@@ -566,7 +568,7 @@ function ProductModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       data-ocid="product.modal"
     >
       <div
@@ -852,6 +854,57 @@ function CheckoutModal({
   const [selectedPayment, setSelectedPayment] = useState<string>(
     () => enabledPayments[0]?.id || "",
   );
+  const [selectedUpiApp, setSelectedUpiApp] = useState<string>("");
+  const [upiPendingOrder, setUpiPendingOrder] = useState<Order | null>(null);
+  const [upiTxnInput, setUpiTxnInput] = useState<string>("");
+  const [upiPaymentStep, setUpiPaymentStep] = useState<"select" | "confirm">(
+    "select",
+  );
+
+  const UPI_APPS = [
+    {
+      id: "gpay",
+      label: "Google Pay",
+      upiScheme: "tez://upi/pay",
+      packageAndroid: "com.google.android.apps.nbu.paisa.user",
+    },
+    {
+      id: "phonepe",
+      label: "PhonePe",
+      upiScheme: "phonepe://pay",
+      packageAndroid: "com.phonepe.app",
+    },
+    {
+      id: "paytm",
+      label: "Paytm",
+      upiScheme: "paytmmp://pay",
+      packageAndroid: "net.one97.paytm",
+    },
+    {
+      id: "fampay",
+      label: "FamPay",
+      upiScheme: "fampay://upi/pay",
+      packageAndroid: "com.fampay.in",
+    },
+    {
+      id: "bhim",
+      label: "BHIM UPI",
+      upiScheme: "upi://pay",
+      packageAndroid: "in.org.npci.upiapp",
+    },
+    {
+      id: "amazonpay",
+      label: "Amazon Pay",
+      upiScheme: "amazonpay://upi/pay",
+      packageAndroid: "in.amazon.mShop.android.shopping",
+    },
+    {
+      id: "other",
+      label: "Other UPI App",
+      upiScheme: "upi://pay",
+      packageAndroid: "",
+    },
+  ];
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -941,6 +994,35 @@ function CheckoutModal({
 
   const handleDirectOrder = () => {
     if (!validateForm()) return;
+    const selPm = enabledPayments.find((p) => p.id === selectedPayment);
+    if (selPm?.type === "upi") {
+      if (!selectedUpiApp) {
+        toast.error("Please select a UPI app to proceed");
+        return;
+      }
+      const upiId = selPm.details || "";
+      const amount = finalPrice;
+      const appInfo = UPI_APPS.find((a) => a.id === selectedUpiApp);
+      const upiUrl = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=ROCHER+CLOTHING&am=${amount}&cu=INR&tn=${encodeURIComponent(`Order: ${item!.name} x${item!.qty}`)}`;
+      // Try app-specific deep link first, fallback to generic UPI
+      let deepLink = upiUrl;
+      if (appInfo && appInfo.id === "gpay")
+        deepLink = `tez://upi/pay?pa=${encodeURIComponent(upiId)}&pn=ROCHER+CLOTHING&am=${amount}&cu=INR&tn=${encodeURIComponent(`Order: ${item!.name} x${item!.qty}`)}`;
+      else if (appInfo && appInfo.id === "phonepe")
+        deepLink = `phonepe://pay?pa=${encodeURIComponent(upiId)}&pn=ROCHER+CLOTHING&am=${amount}&cu=INR&tn=${encodeURIComponent(`Order: ${item!.name} x${item!.qty}`)}`;
+      else if (appInfo && appInfo.id === "paytm")
+        deepLink = `paytmmp://pay?pa=${encodeURIComponent(upiId)}&pn=ROCHER+CLOTHING&am=${amount}&cu=INR&tn=${encodeURIComponent(`Order: ${item!.name} x${item!.qty}`)}`;
+      const order = buildOrder(false);
+      setUpiPendingOrder(order);
+      window.location.href = deepLink;
+      setTimeout(() => {
+        setUpiPaymentStep("confirm");
+        toast.success(
+          `Opening ${appInfo?.label || "UPI app"} — complete payment of ₹${amount} and come back to confirm.`,
+        );
+      }, 800);
+      return;
+    }
     const order = buildOrder(false);
     saveOrder(order);
     onOrderPlaced?.(order);
@@ -951,9 +1033,79 @@ function CheckoutModal({
   const inputClass =
     "w-full bg-background border border-border rounded-lg px-4 py-3 text-foreground text-sm font-display placeholder-muted-foreground focus:outline-none focus:border-brand-gold transition-colors";
 
+  if (upiPaymentStep === "confirm" && upiPendingOrder) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="absolute inset-0 bg-black/85 backdrop-blur-md" />
+        <div className="relative z-10 bg-card rounded-xl w-full max-w-md p-7 shadow-2xl border border-brand-gold/30 animate-fade-in-up">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-3xl">💳</span>
+            <div>
+              <h2 className="font-display text-xl font-bold text-brand-gold">
+                Confirm Payment
+              </h2>
+              <p className="text-xs text-muted-foreground font-display">
+                Complete payment of{" "}
+                <span className="text-brand-gold font-bold">
+                  ₹{upiPendingOrder.price}
+                </span>{" "}
+                and enter your transaction ID
+              </p>
+            </div>
+          </div>
+          <div className="gold-divider mb-5" />
+          <p className="text-xs font-bold uppercase tracking-widest text-brand-gold mb-2">
+            UPI Transaction ID / UTR Number
+          </p>
+          <input
+            type="text"
+            placeholder="Enter 12-digit UTR or transaction reference"
+            value={upiTxnInput}
+            onChange={(e) => setUpiTxnInput(e.target.value)}
+            className="w-full bg-background border border-border rounded-lg px-4 py-3 text-foreground text-sm font-display placeholder-muted-foreground focus:outline-none focus:border-brand-gold transition-colors mb-4"
+          />
+          <p className="text-xs text-muted-foreground font-display mb-5">
+            You can find the transaction ID in your UPI app under payment
+            history.
+          </p>
+          <button
+            type="button"
+            disabled={!upiTxnInput.trim()}
+            onClick={() => {
+              const finalOrder = {
+                ...upiPendingOrder,
+                upiTransactionId: upiTxnInput.trim(),
+                upiPaymentStatus: "submitted" as const,
+              };
+              saveOrder(finalOrder);
+              onOrderPlaced?.(finalOrder);
+              toast.success(
+                "Order placed! Payment submitted for verification.",
+              );
+              onClose();
+            }}
+            className="w-full py-3 font-display font-bold text-sm uppercase tracking-widest btn-gold rounded-lg mb-3 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Confirm & Place Order
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setUpiPaymentStep("select");
+              setUpiPendingOrder(null);
+            }}
+            className="w-full py-2 text-xs text-muted-foreground font-display hover:text-brand-gold transition-colors"
+          >
+            ← Go Back / Retry Payment
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       data-ocid="checkout.modal"
     >
       <div
@@ -964,7 +1116,7 @@ function CheckoutModal({
         aria-label="Close"
         onKeyDown={(e) => e.key === "Enter" && onClose()}
       />
-      <div className="relative z-10 bg-card rounded-xl overflow-hidden w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl animate-fade-in-up border border-brand-gold/30">
+      <div className="relative z-10 bg-card w-full sm:max-w-lg h-[95vh] sm:max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-xl shadow-2xl animate-fade-in-up border border-brand-gold/30">
         <button
           type="button"
           onClick={onClose}
@@ -1234,6 +1386,48 @@ function CheckoutModal({
               </div>
             </>
           )}
+
+          {/* UPI App Selector */}
+          {(() => {
+            const selPm = enabledPayments.find((p) => p.id === selectedPayment);
+            if (!selPm || selPm.type !== "upi") return null;
+            return (
+              <div className="mb-5">
+                <p className="text-xs font-bold uppercase tracking-widest text-brand-gold mb-3">
+                  Choose UPI App
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {UPI_APPS.map((app) => (
+                    <button
+                      key={app.id}
+                      type="button"
+                      onClick={() => setSelectedUpiApp(app.id)}
+                      className={`flex items-center gap-2 p-3 rounded-lg border text-sm font-display transition-colors text-left min-h-[44px] ${selectedUpiApp === app.id ? "border-brand-gold bg-brand-gold/10 text-brand-gold" : "border-border text-foreground hover:border-brand-gold/50"}`}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{
+                          background:
+                            selectedUpiApp === app.id
+                              ? "oklch(0.85 0.12 85)"
+                              : "oklch(0.3 0.02 60)",
+                        }}
+                      />
+                      {app.label}
+                    </button>
+                  ))}
+                </div>
+                {selPm.details && (
+                  <p className="text-xs text-muted-foreground mt-2 font-display">
+                    UPI ID:{" "}
+                    <span className="text-brand-gold font-bold">
+                      {selPm.details}
+                    </span>
+                  </p>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Return Policy */}
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3 px-1">
@@ -1536,7 +1730,7 @@ function GoogleLoginModal({
     "w-full border border-gray-200 rounded-xl px-4 py-3 text-gray-800 text-sm focus:outline-none focus:border-amber-500 transition-colors bg-white placeholder:text-gray-400";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div
         className="absolute inset-0 bg-black/80 backdrop-blur-md animate-fade-in"
         onClick={onClose}
@@ -1907,7 +2101,7 @@ function TrackOrderModal({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div
         className="absolute inset-0 bg-black/80 backdrop-blur-md animate-fade-in"
         onClick={onClose}
@@ -2105,7 +2299,7 @@ function AdminLoginModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       data-ocid="admin.modal"
     >
       <div
@@ -4162,6 +4356,72 @@ function AdminPanel({
                             ? ` · Promo: ${order.promoCode}`
                             : ""}
                         </p>
+                        {order.upiTransactionId && (
+                          <div
+                            className="mt-2 p-3 rounded-lg border"
+                            style={{
+                              borderColor:
+                                order.upiPaymentStatus === "verified"
+                                  ? "oklch(0.7 0.15 145 / 0.5)"
+                                  : "oklch(0.85 0.12 85 / 0.4)",
+                              background:
+                                order.upiPaymentStatus === "verified"
+                                  ? "oklch(0.7 0.15 145 / 0.08)"
+                                  : "oklch(0.85 0.12 85 / 0.06)",
+                            }}
+                          >
+                            <p
+                              className="text-xs font-bold uppercase tracking-widest mb-1"
+                              style={{
+                                color:
+                                  order.upiPaymentStatus === "verified"
+                                    ? "oklch(0.7 0.15 145)"
+                                    : "oklch(0.85 0.12 85)",
+                              }}
+                            >
+                              {order.upiPaymentStatus === "verified"
+                                ? "✅ UPI Payment Verified"
+                                : "⏳ UPI Payment Submitted"}
+                            </p>
+                            <p className="text-xs text-muted-foreground font-display">
+                              Transaction ID:{" "}
+                              <span className="text-foreground font-bold select-all">
+                                {order.upiTransactionId}
+                              </span>
+                            </p>
+                            {order.upiPaymentStatus !== "verified" && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const orders = loadOrders().map((o) =>
+                                    o.id === order.id
+                                      ? {
+                                          ...o,
+                                          upiPaymentStatus: "verified" as const,
+                                        }
+                                      : o,
+                                  );
+                                  localStorage.setItem(
+                                    "rocher_orders",
+                                    JSON.stringify(orders),
+                                  );
+                                  logActivity(
+                                    "Admin",
+                                    "UPI Payment Verified",
+                                    `Order ${order.id.slice(-6)} — Txn: ${order.upiTransactionId}`,
+                                  );
+                                  toast.success(
+                                    "UPI payment marked as verified",
+                                  );
+                                  window.dispatchEvent(new Event("storage"));
+                                }}
+                                className="mt-2 px-3 py-1 text-xs font-bold font-display rounded-lg border border-green-500/50 text-green-400 hover:bg-green-500/10 transition-colors"
+                              >
+                                Mark as Verified
+                              </button>
+                            )}
+                          </div>
+                        )}
                         <div className="mt-2 p-3 bg-background/60 rounded-lg border border-border">
                           <p className="text-xs font-bold text-brand-gold uppercase tracking-widest mb-1">
                             Customer Details
@@ -5768,66 +6028,157 @@ export default function App() {
                       const currentStep = steps.indexOf(
                         order.trackingStatus || "placed",
                       );
+                      const canCancel =
+                        order.status !== "cancelled" &&
+                        (order.trackingStatus === "placed" ||
+                          order.trackingStatus === "packed" ||
+                          !order.trackingStatus);
                       return (
                         <div
                           key={order.id}
-                          className="rounded-xl border border-border bg-background/60 p-5"
+                          className={`rounded-xl border p-5 ${order.status === "cancelled" ? "border-red-500/20 bg-red-950/10" : "border-border bg-background/60"}`}
                         >
-                          {/* Header */}
-                          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                          {/* Header row */}
+                          <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
                             <div>
                               <span className="font-display font-bold text-foreground text-base">
                                 {order.product}
                               </span>
-                              <span className="ml-2 text-xs text-muted-foreground">
-                                · {order.size} · Qty {order.qty}
-                              </span>
+                              <div className="flex flex-wrap gap-2 mt-1">
+                                <span className="text-xs text-muted-foreground bg-border/30 px-2 py-0.5 rounded">
+                                  Size: {order.size}
+                                </span>
+                                <span className="text-xs text-muted-foreground bg-border/30 px-2 py-0.5 rounded">
+                                  Qty: {order.qty}
+                                </span>
+                                <span
+                                  className="text-xs bg-border/30 px-2 py-0.5 rounded"
+                                  style={{ color: "oklch(0.85 0.12 85)" }}
+                                >
+                                  ₹{order.price}
+                                </span>
+                              </div>
                             </div>
                             <span
-                              className={`text-xs font-bold px-2 py-0.5 rounded uppercase tracking-widest ${order.status === "placed" ? "bg-green-900/40 text-green-400" : "bg-red-900/40 text-red-400"}`}
+                              className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest ${order.status === "placed" ? "bg-green-900/40 text-green-400" : "bg-red-900/40 text-red-400"}`}
                             >
                               {order.status === "placed"
                                 ? "Active"
                                 : "Cancelled"}
                             </span>
                           </div>
-                          {/* Price & Payment */}
-                          <div className="flex flex-wrap gap-4 text-xs text-muted-foreground font-display mb-3">
-                            <span
-                              style={{ color: "oklch(0.85 0.12 85)" }}
-                              className="font-bold text-sm"
-                            >
-                              ₹{order.price}
-                            </span>
-                            <span>Payment: {order.paymentMethod}</span>
-                            {order.promoCode && (
-                              <span className="text-green-400">
-                                {order.promoCode}
+
+                          <div className="gold-divider mb-3" />
+
+                          {/* Full details grid */}
+                          <div className="grid grid-cols-1 gap-2 text-xs font-display mb-3">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">
+                                Order ID
                               </span>
+                              <span className="text-foreground font-mono font-bold">
+                                #{order.id.slice(-8).toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">
+                                Order Date
+                              </span>
+                              <span className="text-foreground">
+                                {new Date(order.createdAt).toLocaleDateString(
+                                  "en-IN",
+                                  {
+                                    day: "numeric",
+                                    month: "short",
+                                    year: "numeric",
+                                  },
+                                )}
+                                {" · "}
+                                {new Date(order.createdAt).toLocaleTimeString(
+                                  "en-IN",
+                                  { hour: "2-digit", minute: "2-digit" },
+                                )}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">
+                                Order Type
+                              </span>
+                              <span className="text-foreground">
+                                {order.viaInstagram
+                                  ? "Via Instagram DM"
+                                  : "Direct Order"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">
+                                Payment
+                              </span>
+                              <span className="text-foreground">
+                                {order.paymentMethod}
+                              </span>
+                            </div>
+                            {order.upiTransactionId && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                  UTR / Transaction ID
+                                </span>
+                                <span className="font-mono text-foreground">
+                                  {order.upiTransactionId}
+                                </span>
+                              </div>
                             )}
-                            <span>
-                              {new Date(order.createdAt).toLocaleDateString(
-                                "en-IN",
-                                {
-                                  day: "numeric",
-                                  month: "short",
-                                  year: "numeric",
-                                },
-                              )}
-                            </span>
+                            {order.upiTransactionId && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                  UPI Payment Status
+                                </span>
+                                <span
+                                  style={{
+                                    color:
+                                      order.upiPaymentStatus === "verified"
+                                        ? "oklch(0.7 0.15 145)"
+                                        : "oklch(0.85 0.12 85)",
+                                  }}
+                                  className="font-bold"
+                                >
+                                  {order.upiPaymentStatus === "verified"
+                                    ? "✅ Verified"
+                                    : "⏳ Under Verification"}
+                                </span>
+                              </div>
+                            )}
+                            {order.promoCode && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                  Promo Code
+                                </span>
+                                <span className="text-green-400 font-bold">
+                                  {order.promoCode}
+                                </span>
+                              </div>
+                            )}
                           </div>
-                          {/* Address */}
-                          <div className="text-xs text-muted-foreground font-display mb-4">
-                            <span className="text-foreground font-semibold">
-                              {order.name}
-                            </span>{" "}
-                            · {order.phone}
-                            <br />
-                            {order.address}
+
+                          {/* Delivery info */}
+                          <div className="rounded-lg bg-background/40 border border-border/50 p-3 mb-3 text-xs font-display">
+                            <p className="text-muted-foreground text-[10px] uppercase tracking-widest mb-1">
+                              Delivery Address
+                            </p>
+                            <p className="text-foreground font-semibold">
+                              {order.name} · {order.phone}
+                            </p>
+                            <p className="text-muted-foreground mt-0.5">
+                              {order.address}
+                            </p>
                           </div>
+
                           {/* Tracking stepper */}
                           {order.status === "placed" && (
-                            <div className="mt-2">
+                            <div className="mt-2 mb-3">
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-display mb-2">
+                                Order Status
+                              </p>
                               <div className="flex items-center gap-0">
                                 {steps.map((step, i) => (
                                   <div
@@ -5868,10 +6219,35 @@ export default function App() {
                               </div>
                             </div>
                           )}
-                          {/* Order ID */}
-                          <p className="text-[10px] text-muted-foreground font-display mt-3">
-                            Order ID: #{order.id.slice(-8).toUpperCase()}
-                          </p>
+
+                          {/* Cancel Order Button */}
+                          {canCancel ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    "Are you sure you want to cancel this order? This cannot be undone.",
+                                  )
+                                ) {
+                                  customerCancelOrder(order.id, order.phone);
+                                  toast.success(
+                                    "Order cancelled successfully.",
+                                  );
+                                }
+                              }}
+                              className="mt-2 w-full py-2.5 rounded-lg border border-red-500/50 text-red-400 text-xs font-display font-bold uppercase tracking-widest hover:bg-red-500/15 active:bg-red-500/25 transition-colors"
+                            >
+                              ✕ Cancel Order
+                            </button>
+                          ) : (
+                            order.status !== "cancelled" && (
+                              <p className="mt-2 text-center text-[10px] text-muted-foreground font-display py-2 rounded-lg border border-border/30">
+                                Order cannot be cancelled at this stage —
+                                contact us on Instagram
+                              </p>
+                            )
+                          )}
                         </div>
                       );
                     })}
