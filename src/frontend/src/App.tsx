@@ -867,42 +867,49 @@ function CheckoutModal({
       label: "Google Pay",
       upiScheme: "tez://upi/pay",
       packageAndroid: "com.google.android.apps.nbu.paisa.user",
+      logo: "/assets/generated/gpay-logo-transparent.dim_120x120.png",
     },
     {
       id: "phonepe",
       label: "PhonePe",
       upiScheme: "phonepe://pay",
       packageAndroid: "com.phonepe.app",
+      logo: "/assets/generated/phonepe-logo-transparent.dim_120x120.png",
     },
     {
       id: "paytm",
       label: "Paytm",
       upiScheme: "paytmmp://pay",
       packageAndroid: "net.one97.paytm",
+      logo: "/assets/generated/paytm-logo-transparent.dim_120x120.png",
     },
     {
       id: "fampay",
       label: "FamPay",
       upiScheme: "fampay://upi/pay",
       packageAndroid: "com.fampay.in",
+      logo: "/assets/generated/fampay-logo-transparent.dim_120x120.png",
     },
     {
       id: "bhim",
       label: "BHIM UPI",
       upiScheme: "upi://pay",
       packageAndroid: "in.org.npci.upiapp",
+      logo: "/assets/generated/bhim-logo-transparent.dim_120x120.png",
     },
     {
       id: "amazonpay",
       label: "Amazon Pay",
       upiScheme: "amazonpay://upi/pay",
       packageAndroid: "in.amazon.mShop.android.shopping",
+      logo: "/assets/generated/amazonpay-logo-transparent.dim_120x120.png",
     },
     {
       id: "other",
       label: "Other UPI App",
       upiScheme: "upi://pay",
       packageAndroid: "",
+      logo: "",
     },
   ];
 
@@ -1396,24 +1403,26 @@ function CheckoutModal({
                 <p className="text-xs font-bold uppercase tracking-widest text-brand-gold mb-3">
                   Choose UPI App
                 </p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   {UPI_APPS.map((app) => (
                     <button
                       key={app.id}
                       type="button"
                       onClick={() => setSelectedUpiApp(app.id)}
-                      className={`flex items-center gap-2 p-3 rounded-lg border text-sm font-display transition-colors text-left min-h-[44px] ${selectedUpiApp === app.id ? "border-brand-gold bg-brand-gold/10 text-brand-gold" : "border-border text-foreground hover:border-brand-gold/50"}`}
+                      className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg border text-xs font-display transition-all text-center min-h-[80px] ${selectedUpiApp === app.id ? "border-brand-gold bg-brand-gold/10 text-brand-gold ring-1 ring-brand-gold/40" : "border-border text-foreground hover:border-brand-gold/50"}`}
                     >
-                      <span
-                        className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{
-                          background:
-                            selectedUpiApp === app.id
-                              ? "oklch(0.85 0.12 85)"
-                              : "oklch(0.3 0.02 60)",
-                        }}
-                      />
-                      {app.label}
+                      {app.logo ? (
+                        <img
+                          src={app.logo}
+                          alt={app.label}
+                          className="w-9 h-9 rounded-lg object-contain flex-shrink-0"
+                        />
+                      ) : (
+                        <span className="w-9 h-9 rounded-lg bg-brand-gold/20 flex items-center justify-center text-brand-gold text-lg font-bold">
+                          ₹
+                        </span>
+                      )}
+                      <span className="leading-tight">{app.label}</span>
                     </button>
                   ))}
                 </div>
