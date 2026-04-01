@@ -57,6 +57,10 @@ const LS_ORDERS_KEY = "rocher_orders";
 const LS_ACTIVITY_KEY = "rocher_activity_log";
 const LS_GOOGLE_USER_KEY = "rocher_google_user";
 const LS_FOUNDER_KEY = "rocher_founder_data";
+const LS_HERO_KEY = "rocher_hero_content";
+const LS_TRUST_KEY = "rocher_trust_bar";
+const LS_URGENCY_KEY = "rocher_urgency";
+const LS_BRAND_STORY_KEY = "rocher_brand_story";
 const ADMIN_GMAIL = "tchhillar493@gmail.com";
 
 const SIZE_GUIDE = [
@@ -74,6 +78,30 @@ interface Product {
   description: string;
   stock: number;
   bestSeller: boolean;
+  materialDescription?: string;
+}
+
+interface HeroContent {
+  tagline: string;
+  subheading: string;
+  ctaText: string;
+}
+
+interface TrustBarContent {
+  item1: string;
+  item2: string;
+  item3: string;
+}
+
+interface UrgencyContent {
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  ctaText: string;
+}
+
+interface BrandStoryContent {
+  quote: string;
 }
 
 interface ProductSection {
@@ -494,6 +522,64 @@ function saveFounderData(data: FounderData) {
   } catch {}
 }
 
+const DEFAULT_HERO: HeroContent = {
+  tagline: "FEEL THE STRENGTH",
+  subheading: "Premium Gym & Streetwear for the New Generation",
+  ctaText: "Shop Now",
+};
+function loadHeroContent(): HeroContent {
+  try {
+    const r = localStorage.getItem(LS_HERO_KEY);
+    return r ? { ...DEFAULT_HERO, ...JSON.parse(r) } : DEFAULT_HERO;
+  } catch {
+    return DEFAULT_HERO;
+  }
+}
+
+const DEFAULT_TRUST: TrustBarContent = {
+  item1: "🚚 Free Delivery Available",
+  item2: "🔥 Limited Drop – Few Pieces Only",
+  item3: "⭐ Premium Quality Streetwear",
+};
+function loadTrustBar(): TrustBarContent {
+  try {
+    const r = localStorage.getItem(LS_TRUST_KEY);
+    return r ? { ...DEFAULT_TRUST, ...JSON.parse(r) } : DEFAULT_TRUST;
+  } catch {
+    return DEFAULT_TRUST;
+  }
+}
+
+const DEFAULT_URGENCY: UrgencyContent = {
+  eyebrow: "Exclusive Release",
+  title: "LIMITED\nDROP",
+  subtitle: "Only a few pieces available. Once sold out, it's gone.",
+  ctaText: "GET YOURS NOW",
+};
+function loadUrgency(): UrgencyContent {
+  try {
+    const r = localStorage.getItem(LS_URGENCY_KEY);
+    return r ? { ...DEFAULT_URGENCY, ...JSON.parse(r) } : DEFAULT_URGENCY;
+  } catch {
+    return DEFAULT_URGENCY;
+  }
+}
+
+const DEFAULT_BRAND_STORY: BrandStoryContent = {
+  quote:
+    "ROCHER was built to represent strength, confidence, and individuality. This is more than fashion — this is identity.",
+};
+function loadBrandStory(): BrandStoryContent {
+  try {
+    const r = localStorage.getItem(LS_BRAND_STORY_KEY);
+    return r
+      ? { ...DEFAULT_BRAND_STORY, ...JSON.parse(r) }
+      : DEFAULT_BRAND_STORY;
+  } catch {
+    return DEFAULT_BRAND_STORY;
+  }
+}
+
 function salePrice(price: number, discount: number): number {
   return Math.round(price * (1 - discount / 100));
 }
@@ -908,7 +994,9 @@ function ProductModal({
               {product.description}
             </p>
             <p className="text-xs text-muted-foreground italic">
-              {materialLine ?? "100% Premium Cotton — Machine wash cold"}
+              {product.materialDescription ??
+                materialLine ??
+                "100% Premium Cotton — Machine wash cold"}
             </p>
 
             {/* Size guide */}
@@ -2764,6 +2852,7 @@ interface AdminProduct {
   stock: number;
   bestSeller: boolean;
   images: string[];
+  materialDescription?: string;
 }
 
 interface NewProductDraft {
@@ -2796,6 +2885,10 @@ function AdminPanel({
   founderData: initialFounder,
   seoTitle: initialSeoTitle,
   materialLine: initialMaterialLine,
+  heroContent: initialHeroContent,
+  trustBarContent: initialTrustBarContent,
+  urgencyContent: initialUrgencyContent,
+  brandStoryContent: initialBrandStoryContent,
   actor,
   storageClient,
   onClose,
@@ -2811,6 +2904,10 @@ function AdminPanel({
   founderData: FounderData;
   seoTitle: string;
   materialLine: string;
+  heroContent: HeroContent;
+  trustBarContent: TrustBarContent;
+  urgencyContent: UrgencyContent;
+  brandStoryContent: BrandStoryContent;
   actor: backendInterface | null;
   storageClient: StorageClient | null;
   onClose: (
@@ -2825,6 +2922,10 @@ function AdminPanel({
     newFounder?: FounderData,
     newSeoTitle?: string,
     newMaterialLine?: string,
+    newHero?: HeroContent,
+    newTrust?: TrustBarContent,
+    newUrgency?: UrgencyContent,
+    newBrandStory?: BrandStoryContent,
   ) => void;
 }) {
   const [editData, setEditData] = useState<AdminProduct[]>(
@@ -2836,6 +2937,7 @@ function AdminPanel({
       stock: p.stock,
       bestSeller: p.bestSeller,
       images: p.images,
+      materialDescription: p.materialDescription,
     })),
   );
 
@@ -2864,6 +2966,18 @@ function AdminPanel({
   );
   const [seoTitle, setSeoTitle] = useState<string>(initialSeoTitle);
   const [materialLine, setMaterialLine] = useState<string>(initialMaterialLine);
+  const [heroContent, setHeroContent] = useState<HeroContent>(
+    initialHeroContent ?? DEFAULT_HERO,
+  );
+  const [trustBarContent, setTrustBarContent] = useState<TrustBarContent>(
+    initialTrustBarContent ?? DEFAULT_TRUST,
+  );
+  const [urgencyContent, setUrgencyContent] = useState<UrgencyContent>(
+    initialUrgencyContent ?? DEFAULT_URGENCY,
+  );
+  const [brandStoryContent, setBrandStoryContent] = useState<BrandStoryContent>(
+    initialBrandStoryContent ?? DEFAULT_BRAND_STORY,
+  );
   const [promoAddOpen, setPromoAddOpen] = useState(false);
   const [paymentAddOpen, setPaymentAddOpen] = useState(false);
   const [newPromoCode, setNewPromoCode] = useState("");
@@ -2886,6 +3000,7 @@ function AdminPanel({
     | "orders"
     | "activity"
     | "users"
+    | "content"
   >("products");
 
   const refreshOrders = () => setOrders(loadOrders());
@@ -2970,6 +3085,7 @@ function AdminPanel({
         description: e.description,
         stock: e.stock,
         bestSeller: e.bestSeller,
+        materialDescription: e.materialDescription,
       }));
 
     const saveData = {
@@ -3006,6 +3122,35 @@ function AdminPanel({
       LS_MATERIAL_KEY,
       materialLine.trim() || "100% Premium Cotton — Machine wash cold",
     );
+    localStorage.setItem(
+      LS_HERO_KEY,
+      JSON.stringify({
+        tagline: heroContent.tagline,
+        subheading: heroContent.subheading,
+        ctaText: heroContent.ctaText,
+      }),
+    );
+    localStorage.setItem(
+      LS_TRUST_KEY,
+      JSON.stringify({
+        item1: trustBarContent.item1,
+        item2: trustBarContent.item2,
+        item3: trustBarContent.item3,
+      }),
+    );
+    localStorage.setItem(
+      LS_URGENCY_KEY,
+      JSON.stringify({
+        eyebrow: urgencyContent.eyebrow,
+        title: urgencyContent.title,
+        subtitle: urgencyContent.subtitle,
+        ctaText: urgencyContent.ctaText,
+      }),
+    );
+    localStorage.setItem(
+      LS_BRAND_STORY_KEY,
+      JSON.stringify({ quote: brandStoryContent.quote }),
+    );
 
     // Reconstruct full product list
     const merged: Product[] = DEFAULT_PRODUCTS.filter(
@@ -3021,6 +3166,7 @@ function AdminPanel({
         description: e.description,
         stock: e.stock,
         bestSeller: e.bestSeller,
+        materialDescription: e.materialDescription,
       };
     });
 
@@ -3046,6 +3192,23 @@ function AdminPanel({
         seoTitle: seoTitle.trim() || "ROCHER | Premium Clothing Brand",
         materialLine:
           materialLine.trim() || "100% Premium Cotton — Machine wash cold",
+        heroContent: {
+          tagline: heroContent.tagline,
+          subheading: heroContent.subheading,
+          ctaText: heroContent.ctaText,
+        },
+        trustBarContent: {
+          item1: trustBarContent.item1,
+          item2: trustBarContent.item2,
+          item3: trustBarContent.item3,
+        },
+        urgencyContent: {
+          eyebrow: urgencyContent.eyebrow,
+          title: urgencyContent.title,
+          subtitle: urgencyContent.subtitle,
+          ctaText: urgencyContent.ctaText,
+        },
+        brandStoryContent: { quote: brandStoryContent.quote },
       };
       // Upload base64 images to blob storage
       if (storageClient) {
@@ -3136,6 +3299,23 @@ function AdminPanel({
       newFounder,
       seoTitle.trim() || "ROCHER | Premium Clothing Brand",
       materialLine.trim() || "100% Premium Cotton — Machine wash cold",
+      {
+        tagline: heroContent.tagline,
+        subheading: heroContent.subheading,
+        ctaText: heroContent.ctaText,
+      },
+      {
+        item1: trustBarContent.item1,
+        item2: trustBarContent.item2,
+        item3: trustBarContent.item3,
+      },
+      {
+        eyebrow: urgencyContent.eyebrow,
+        title: urgencyContent.title,
+        subtitle: urgencyContent.subtitle,
+        ctaText: urgencyContent.ctaText,
+      },
+      { quote: brandStoryContent.quote },
     );
   };
 
@@ -3274,6 +3454,7 @@ function AdminPanel({
               { key: "payments", label: "Payments", icon: "💳" },
               { key: "promos", label: "Promos", icon: "🎟️" },
               { key: "appearance", label: "Appearance", icon: "🎨" },
+              { key: "content", label: "Content", icon: "📝" },
             ] as { key: typeof activeTab; label: string; icon: string }[]
           ).map((tab) => (
             <button
@@ -4387,6 +4568,25 @@ function AdminPanel({
                         ★ Mark as Best Seller
                       </label>
                     </div>
+                    {/* Material Description */}
+                    <div className="sm:col-span-2">
+                      <label
+                        htmlFor={`ap-mat-${p.id}`}
+                        className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                      >
+                        Material Description (optional — overrides global)
+                      </label>
+                      <input
+                        id={`ap-mat-${p.id}`}
+                        type="text"
+                        value={p.materialDescription ?? ""}
+                        onChange={(e) =>
+                          update(p.id, "materialDescription", e.target.value)
+                        }
+                        placeholder="e.g. 100% Premium Cotton — Gym Fit"
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                      />
+                    </div>
                     {/* Image management */}
                     <div className="sm:col-span-2 mt-2">
                       <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-2">
@@ -4656,6 +4856,275 @@ function AdminPanel({
               <button
                 type="button"
                 onClick={handleSave}
+                className="flex items-center gap-2 px-6 py-3 btn-gold font-display font-bold text-sm rounded-lg"
+              >
+                <Save size={15} /> Save All Changes
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* ── CONTENT EDITOR ── */}
+        {activeTab === "content" && (
+          <section className="space-y-8">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-brand-gold">📝</span>
+              <h2 className="font-display text-xl font-bold text-foreground">
+                Homepage Content
+              </h2>
+            </div>
+
+            {/* Hero Section */}
+            <div className="bg-card border border-border rounded-xl p-6 shadow-card">
+              <h3 className="font-display font-bold text-foreground mb-4 text-base uppercase tracking-widest">
+                Hero Section
+              </h3>
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label
+                    htmlFor="ct-hero-tagline"
+                    className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                  >
+                    Tagline (above ROCHER)
+                  </label>
+                  <input
+                    id="ct-hero-tagline"
+                    type="text"
+                    value={heroContent.tagline}
+                    onChange={(e) =>
+                      setHeroContent((h) => ({ ...h, tagline: e.target.value }))
+                    }
+                    placeholder="FEEL THE STRENGTH"
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="ct-hero-sub"
+                    className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                  >
+                    Subheading
+                  </label>
+                  <input
+                    id="ct-hero-sub"
+                    type="text"
+                    value={heroContent.subheading}
+                    onChange={(e) =>
+                      setHeroContent((h) => ({
+                        ...h,
+                        subheading: e.target.value,
+                      }))
+                    }
+                    placeholder="Premium Gym & Streetwear for the New Generation"
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="ct-hero-cta"
+                    className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                  >
+                    CTA Button Text
+                  </label>
+                  <input
+                    id="ct-hero-cta"
+                    type="text"
+                    value={heroContent.ctaText}
+                    onChange={(e) =>
+                      setHeroContent((h) => ({ ...h, ctaText: e.target.value }))
+                    }
+                    placeholder="Shop Now"
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Trust Bar */}
+            <div className="bg-card border border-border rounded-xl p-6 shadow-card">
+              <h3 className="font-display font-bold text-foreground mb-4 text-base uppercase tracking-widest">
+                Trust Bar
+              </h3>
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label
+                    htmlFor="ct-trust-1"
+                    className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                  >
+                    Item 1
+                  </label>
+                  <input
+                    id="ct-trust-1"
+                    type="text"
+                    value={trustBarContent.item1}
+                    onChange={(e) =>
+                      setTrustBarContent((t) => ({
+                        ...t,
+                        item1: e.target.value,
+                      }))
+                    }
+                    placeholder="🚚 Free Delivery Available"
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="ct-trust-2"
+                    className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                  >
+                    Item 2
+                  </label>
+                  <input
+                    id="ct-trust-2"
+                    type="text"
+                    value={trustBarContent.item2}
+                    onChange={(e) =>
+                      setTrustBarContent((t) => ({
+                        ...t,
+                        item2: e.target.value,
+                      }))
+                    }
+                    placeholder="🔥 Limited Drop – Few Pieces Only"
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="ct-trust-3"
+                    className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                  >
+                    Item 3
+                  </label>
+                  <input
+                    id="ct-trust-3"
+                    type="text"
+                    value={trustBarContent.item3}
+                    onChange={(e) =>
+                      setTrustBarContent((t) => ({
+                        ...t,
+                        item3: e.target.value,
+                      }))
+                    }
+                    placeholder="⭐ Premium Quality Streetwear"
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Urgency Section */}
+            <div className="bg-card border border-border rounded-xl p-6 shadow-card">
+              <h3 className="font-display font-bold text-foreground mb-4 text-base uppercase tracking-widest">
+                Urgency / Limited Drop Section
+              </h3>
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label
+                    htmlFor="ct-urg-eyebrow"
+                    className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                  >
+                    Eyebrow Text (small text above title)
+                  </label>
+                  <input
+                    id="ct-urg-eyebrow"
+                    type="text"
+                    value={urgencyContent.eyebrow}
+                    onChange={(e) =>
+                      setUrgencyContent((u) => ({
+                        ...u,
+                        eyebrow: e.target.value,
+                      }))
+                    }
+                    placeholder="Exclusive Release"
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="ct-urg-title"
+                    className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                  >
+                    Title (use \n for line break)
+                  </label>
+                  <textarea
+                    id="ct-urg-title"
+                    value={urgencyContent.title}
+                    onChange={(e) =>
+                      setUrgencyContent((u) => ({
+                        ...u,
+                        title: e.target.value,
+                      }))
+                    }
+                    rows={2}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors resize-none"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="ct-urg-sub"
+                    className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                  >
+                    Subtitle
+                  </label>
+                  <input
+                    id="ct-urg-sub"
+                    type="text"
+                    value={urgencyContent.subtitle}
+                    onChange={(e) =>
+                      setUrgencyContent((u) => ({
+                        ...u,
+                        subtitle: e.target.value,
+                      }))
+                    }
+                    placeholder="Only a few pieces available. Once sold out, it's gone."
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="ct-urg-cta"
+                    className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-1.5"
+                  >
+                    CTA Button Text
+                  </label>
+                  <input
+                    id="ct-urg-cta"
+                    type="text"
+                    value={urgencyContent.ctaText}
+                    onChange={(e) =>
+                      setUrgencyContent((u) => ({
+                        ...u,
+                        ctaText: e.target.value,
+                      }))
+                    }
+                    placeholder="GET YOURS NOW"
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Brand Story */}
+            <div className="bg-card border border-border rounded-xl p-6 shadow-card">
+              <h3 className="font-display font-bold text-foreground mb-4 text-base uppercase tracking-widest">
+                Brand Story Quote
+              </h3>
+              <textarea
+                value={brandStoryContent.quote}
+                onChange={(e) =>
+                  setBrandStoryContent({ quote: e.target.value })
+                }
+                rows={4}
+                placeholder="ROCHER was built to represent strength, confidence, and individuality..."
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand-gold transition-colors resize-none"
+              />
+            </div>
+
+            <div className="flex gap-3 justify-end pb-4">
+              <button
+                type="button"
+                onClick={handleSave}
+                data-ocid="admin.save_button"
                 className="flex items-center gap-2 px-6 py-3 btn-gold font-display font-bold text-sm rounded-lg"
               >
                 <Save size={15} /> Save All Changes
@@ -5229,7 +5698,9 @@ function ProductCard({
           {product.description}
         </p>
         <p className="text-xs text-muted-foreground/60 italic mb-3">
-          {materialLine ?? "100% Premium Cotton — Machine wash cold"}
+          {product.materialDescription ??
+            materialLine ??
+            "100% Premium Cotton — Machine wash cold"}
         </p>
         <div
           className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full mb-4"
@@ -5632,10 +6103,23 @@ export default function App() {
   const [materialLine, setMaterialLine] = useState<string>(() =>
     loadMaterialLine(),
   );
+  const [heroContent, setHeroContent] = useState<HeroContent>(() =>
+    loadHeroContent(),
+  );
+  const [trustBarContent, setTrustBarContent] = useState<TrustBarContent>(() =>
+    loadTrustBar(),
+  );
+  const [urgencyContent, setUrgencyContent] = useState<UrgencyContent>(() =>
+    loadUrgency(),
+  );
+  const [brandStoryContent, setBrandStoryContent] = useState<BrandStoryContent>(
+    () => loadBrandStory(),
+  );
   const [activeSection, setActiveSection] = useState<string>("__all__");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [collectionOpen, setCollectionOpen] = useState(false);
   const [logoClickCount, setLogoClickCount] = useState(0);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [showMyOrders, setShowMyOrders] = useState(false);
@@ -5750,6 +6234,43 @@ export default function App() {
               setMaterialLine((data as any).materialLine);
               localStorage.setItem(LS_MATERIAL_KEY, (data as any).materialLine);
             }
+            if ((data as any).heroContent) {
+              setHeroContent({ ...DEFAULT_HERO, ...(data as any).heroContent });
+              localStorage.setItem(
+                LS_HERO_KEY,
+                JSON.stringify((data as any).heroContent),
+              );
+            }
+            if ((data as any).trustBarContent) {
+              setTrustBarContent({
+                ...DEFAULT_TRUST,
+                ...(data as any).trustBarContent,
+              });
+              localStorage.setItem(
+                LS_TRUST_KEY,
+                JSON.stringify((data as any).trustBarContent),
+              );
+            }
+            if ((data as any).urgencyContent) {
+              setUrgencyContent({
+                ...DEFAULT_URGENCY,
+                ...(data as any).urgencyContent,
+              });
+              localStorage.setItem(
+                LS_URGENCY_KEY,
+                JSON.stringify((data as any).urgencyContent),
+              );
+            }
+            if ((data as any).brandStoryContent) {
+              setBrandStoryContent({
+                ...DEFAULT_BRAND_STORY,
+                ...(data as any).brandStoryContent,
+              });
+              localStorage.setItem(
+                LS_BRAND_STORY_KEY,
+                JSON.stringify((data as any).brandStoryContent),
+              );
+            }
           } catch {}
         }
         // Fallback: load sections from separate key if not found in main data
@@ -5767,8 +6288,8 @@ export default function App() {
             }
           } catch {}
         }
-        // Fallback: load products from separate key if not found in main data
-        if (!loadedOk && productsStr) {
+        // Always prefer siteData_products (dedicated key, always freshest)
+        if (productsStr) {
           try {
             const prods = JSON.parse(productsStr) as Product[];
             if (Array.isArray(prods) && prods.length > 0) {
@@ -5830,6 +6351,15 @@ export default function App() {
     window.addEventListener("hashchange", handleHash);
     return () => window.removeEventListener("hashchange", handleHash);
   }, [customSections]);
+
+  // Close collection dropdown when clicking outside
+  useEffect(() => {
+    if (!collectionOpen) return;
+    const handler = () => setCollectionOpen(false);
+    document.addEventListener("click", handler, { capture: true, once: true });
+    return () =>
+      document.removeEventListener("click", handler, { capture: true });
+  }, [collectionOpen]);
 
   const handleLogoClick = () => {
     scrollTo("home");
@@ -5920,22 +6450,22 @@ export default function App() {
             <nav className="hidden md:flex items-center gap-8">
               {navLinks.map((link) =>
                 link.id === "products" ? (
-                  <div key={link.id} className="relative group">
+                  <div key={link.id} className="relative">
                     <button
                       type="button"
-                      onClick={() => scrollTo(link.id)}
+                      onClick={() => setCollectionOpen((o) => !o)}
                       data-ocid="nav.link"
                       className="font-display text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-brand-gold transition-colors flex items-center gap-1"
                     >
                       {link.label}
                       <ChevronDown
                         size={10}
-                        className="opacity-60 group-hover:opacity-100 transition-opacity"
+                        className={`opacity-60 transition-opacity ${collectionOpen ? "opacity-100 rotate-180" : ""}`}
                       />
                     </button>
                     {/* Section dropdown */}
                     <div
-                      className="absolute top-full left-1/2 -translate-x-1/2 mt-2 min-w-[160px] rounded-xl border border-border/60 shadow-xl overflow-hidden opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50"
+                      className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 min-w-[160px] rounded-xl border border-border/60 shadow-xl overflow-hidden transition-all duration-200 z-50 ${collectionOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
                       style={{
                         backgroundColor: "oklch(0.06 0 0 / 0.97)",
                         backdropFilter: "blur(16px)",
@@ -5946,6 +6476,7 @@ export default function App() {
                         onClick={() => {
                           scrollTo("products");
                           setActiveSection("__all__");
+                          setCollectionOpen(false);
                         }}
                         className={`block w-full text-left px-4 py-2.5 font-display text-xs uppercase tracking-widest transition-colors ${activeSection === "__all__" ? "text-brand-gold" : "text-muted-foreground hover:text-brand-gold"}`}
                       >
@@ -5956,6 +6487,7 @@ export default function App() {
                         onClick={() => {
                           scrollTo("products");
                           setActiveSection("__new__");
+                          setCollectionOpen(false);
                         }}
                         className={`block w-full text-left px-4 py-2.5 font-display text-xs uppercase tracking-widest transition-colors ${activeSection === "__new__" ? "text-brand-gold" : "text-muted-foreground hover:text-brand-gold"}`}
                       >
@@ -5968,6 +6500,7 @@ export default function App() {
                           onClick={() => {
                             scrollTo("products");
                             setActiveSection(sec.id);
+                            setCollectionOpen(false);
                           }}
                           className={`block w-full text-left px-4 py-2.5 font-display text-xs uppercase tracking-widest transition-colors ${activeSection === sec.id ? "text-brand-gold" : "text-muted-foreground hover:text-brand-gold"}`}
                         >
@@ -6254,7 +6787,7 @@ export default function App() {
         </div>
         <div className="relative z-10 text-center px-4 max-w-5xl mx-auto">
           <p className="font-display text-xs uppercase tracking-[0.5em] text-brand-gold mb-4 animate-fade-in-up opacity-0">
-            FEEL THE STRENGTH
+            {heroContent.tagline}
           </p>
           <h1
             className="font-display font-bold uppercase leading-none text-foreground animate-fade-in-up opacity-0 delay-200"
@@ -6271,7 +6804,7 @@ export default function App() {
             className="font-display font-medium tracking-[0.35em] text-foreground/75 animate-fade-in-up opacity-0 delay-400"
             style={{ fontSize: "clamp(0.8rem, 2vw, 1.2rem)" }}
           >
-            Premium Gym & Streetwear for the New Generation
+            {heroContent.subheading}
           </p>
           <div className="mt-10 animate-fade-in-up opacity-0 delay-600">
             <button
@@ -6280,7 +6813,7 @@ export default function App() {
               data-ocid="hero.primary_button"
               className="inline-flex items-center gap-3 px-12 py-4 btn-gold font-display font-bold uppercase tracking-[0.25em] text-sm shadow-gold-glow"
             >
-              Shop Now <ChevronDown size={15} />
+              {heroContent.ctaText} <ChevronDown size={15} />
             </button>
           </div>
         </div>
@@ -6297,15 +6830,15 @@ export default function App() {
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-10">
             <span className="font-display font-bold text-xs uppercase tracking-[0.2em] text-foreground/80">
-              🚚 Free Delivery Available
+              {trustBarContent.item1}
             </span>
             <span className="hidden sm:block w-px h-4 bg-border/60" />
             <span className="font-display font-bold text-xs uppercase tracking-[0.2em] text-foreground/80">
-              🔥 Limited Drop – Few Pieces Only
+              {trustBarContent.item2}
             </span>
             <span className="hidden sm:block w-px h-4 bg-border/60" />
             <span className="font-display font-bold text-xs uppercase tracking-[0.2em] text-foreground/80">
-              ⭐ Premium Quality Streetwear
+              {trustBarContent.item3}
             </span>
           </div>
         </div>
@@ -6504,7 +7037,7 @@ export default function App() {
         />
         <div className="relative z-10 max-w-3xl mx-auto text-center">
           <p className="font-display font-black text-xs uppercase tracking-[0.5em] text-muted-foreground mb-4">
-            Exclusive Release
+            {urgencyContent.eyebrow}
           </p>
           <h2
             className="font-display font-black uppercase text-foreground mb-6"
@@ -6514,12 +7047,16 @@ export default function App() {
               lineHeight: "0.9",
             }}
           >
-            LIMITED
-            <br />
-            DROP
+            {urgencyContent.title.split("\n").map((line, i, arr) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: static content
+              <span key={i}>
+                {line}
+                {i < arr.length - 1 && <br />}
+              </span>
+            ))}
           </h2>
           <p className="text-muted-foreground text-base mb-10 font-display max-w-md mx-auto">
-            Only a few pieces available. Once sold out, it&apos;s gone.
+            {urgencyContent.subtitle}
           </p>
           <button
             type="button"
@@ -6527,7 +7064,7 @@ export default function App() {
             data-ocid="urgency.primary_button"
             className="inline-flex items-center gap-3 px-12 py-4 btn-gold font-display font-black uppercase tracking-[0.25em] text-sm"
           >
-            GET YOURS NOW
+            {urgencyContent.ctaText}
           </button>
         </div>
       </section>
@@ -6546,9 +7083,7 @@ export default function App() {
               letterSpacing: "-0.01em",
             }}
           >
-            &ldquo;ROCHER was built to represent strength, confidence, and
-            individuality. This is more than fashion &mdash; this is
-            identity.&rdquo;
+            &ldquo;{brandStoryContent.quote}&rdquo;
           </blockquote>
           <div className="gold-divider max-w-xs mx-auto mt-14" />
         </div>
@@ -7281,6 +7816,10 @@ export default function App() {
           founderData={founderData}
           seoTitle={seoTitle}
           materialLine={materialLine}
+          heroContent={heroContent}
+          trustBarContent={trustBarContent}
+          urgencyContent={urgencyContent}
+          brandStoryContent={brandStoryContent}
           actor={actor}
           storageClient={storageClient}
           onClose={(
@@ -7295,6 +7834,10 @@ export default function App() {
             newFounder,
             newSeoTitle,
             newMaterialLine,
+            newHero,
+            newTrust,
+            newUrgency,
+            newBrandStory,
           ) => {
             if (updated) setProducts(updated);
             if (newSale) setSale(newSale);
@@ -7310,6 +7853,25 @@ export default function App() {
             }
             if (newSeoTitle !== undefined) setSeoTitle(newSeoTitle);
             if (newMaterialLine !== undefined) setMaterialLine(newMaterialLine);
+            if (newHero) {
+              setHeroContent(newHero);
+              localStorage.setItem(LS_HERO_KEY, JSON.stringify(newHero));
+            }
+            if (newTrust) {
+              setTrustBarContent(newTrust);
+              localStorage.setItem(LS_TRUST_KEY, JSON.stringify(newTrust));
+            }
+            if (newUrgency) {
+              setUrgencyContent(newUrgency);
+              localStorage.setItem(LS_URGENCY_KEY, JSON.stringify(newUrgency));
+            }
+            if (newBrandStory) {
+              setBrandStoryContent(newBrandStory);
+              localStorage.setItem(
+                LS_BRAND_STORY_KEY,
+                JSON.stringify(newBrandStory),
+              );
+            }
             setShowAdminPanel(false);
           }}
         />
